@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PokeMMO Guide Creator</title>
+    <meta
+      name="description"
+      content="Create PokeMMO raid guides with team builders, turn planning, and HTML exports."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="./assets/icon.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand">
+        <img class="brand-logo" src="./assets/icon.png" alt="" aria-hidden="true" />
+        <span class="brand-text">PokeMMO Guide Creator</span>
+      </div>
+      <div class="header-actions">
+        <a class="header-link" href="#guide-setup">Start Guide</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="kicker">Pokemmo Guide Creator by pampaks</p>
+        <h1>Build Full Guides Step By Step</h1>
+        <p class="hero-copy">
+          Start with guide metadata, then build the team, preview the final
+          guide, and export it as HTML and/or markdown.
+        </p>
+      </section>
+
+      <section id="guide-setup" class="panel">
+        <div class="panel-title-wrap">
+          <h2>Step 1 - Guide Information</h2>
+          <p>Add strategy metadata before opening the builder flow.</p>
+        </div>
+
+        <form id="guideSetupForm" class="guide-form">
+          <label for="guideType">Guide Type</label>
+          <select id="guideType" required>
+            <option value="Raid">Raid</option>
+          </select>
+          <p class="hint">Gym rerun flow is planned and will be added later.</p>
+
+          <label for="strategyName">Strategy Name</label>
+          <input
+            id="strategyName"
+            type="text"
+            placeholder="e.g. Electric Core Fast Raid Setup"
+            required
+          />
+
+          <label for="authorName">Author Name (Optional)</label>
+          <input id="authorName" type="text" placeholder="e.g. pampaks" />
+
+          <label for="ignName">IGN Name (Optional)</label>
+          <input id="ignName" type="text" placeholder="e.g. pampaks" />
+
+          <label for="guideDescription">Short Description</label>
+          <textarea
+            id="guideDescription"
+            rows="4"
+            placeholder="What this strategy does and when to use it."
+            required
+          ></textarea>
+
+          <div class="actions">
+            <button id="continueToTeamBtn" type="button" class="btn btn-primary">
+              Continue To Team Builder
+            </button>
+          </div>
+          <p id="guideSetupStatus" class="status" aria-live="polite"></p>
+        </form>
+
+        <section id="guideSummary" class="guide-summary hidden">
+          <div class="summary-head">
+            <h3>Guide Info</h3>
+            <button id="editGuideBtn" type="button" class="btn btn-ghost">Edit</button>
+          </div>
+          <div class="summary-grid">
+            <p><strong>Type:</strong> <span id="summaryGuideType"></span></p>
+            <p><strong>Strategy:</strong> <span id="summaryStrategyName"></span></p>
+            <p><strong>Author:</strong> <span id="summaryAuthorName"></span></p>
+            <p><strong>IGN:</strong> <span id="summaryIgnName"></span></p>
+            <p class="summary-description">
+              <strong>Description:</strong> <span id="summaryDescription"></span>
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <section id="team-step" class="hidden">
+        <section id="team-creator" class="panel tool-panel">
+        <div class="panel-title-wrap">
+          <div class="panel-title-head">
+            <h2>Step 2 - Team Creator</h2>
+            <button
+              type="button"
+              id="teamCreatorInfoBtn"
+              class="info-icon-btn"
+              aria-label="Open Team Creator help"
+              aria-haspopup="dialog"
+              aria-controls="teamCreatorInfoModal"
+            >
+              i
+            </button>
+          </div>
+          <p>
+            Supports Pokepaste URL/ID, raw Showdown format, and mixed slots:
+            specific Pokemon or flexible type placeholders.
+          </p>
+        </div>
+
+        <div
+          id="teamCreatorInfoModal"
+          class="info-modal hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="teamCreatorInfoTitle"
+        >
+          <div class="info-modal-card">
+            <div class="info-modal-head">
+              <div>
+                <p class="info-modal-kicker">Step 2 Help</p>
+                <h3 id="teamCreatorInfoTitle">Team Creator Workflows</h3>
+              </div>
+              <button
+                type="button"
+                id="teamCreatorInfoCloseBtn"
+                class="info-modal-close"
+                aria-label="Close Team Creator help"
+              >
+                ×
+              </button>
+            </div>
+
+            <p class="info-modal-copy">
+              All three input methods update the same player team. Importing,
+              editing manually, or rendering raw text will stay synchronized.
+            </p>
+
+            <div class="info-modal-sections">
+              <section class="info-modal-section" data-team-help-section="pokepaste">
+                <h4>Pokepaste Import</h4>
+                <p>
+                  Best when you already have a Pokepaste URL or ID. Import the
+                  team quickly, then fine-tune it in the other tabs if needed.
+                </p>
+              </section>
+
+              <section class="info-modal-section" data-team-help-section="manual">
+                <h4>Manual Builder</h4>
+                <p>
+                  Best for building one slot at a time. Use this for flexible
+                  type slots, custom notes, or small edits without touching raw text.
+                </p>
+              </section>
+
+              <section class="info-modal-section" data-team-help-section="raw">
+                <h4>Raw Import</h4>
+                <p>
+                  Best when you want direct Showdown-style control. Render raw
+                  text into the shared team, clear the current player, or load
+                  full `# P1` to `# P4` exports at once.
+                </p>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <section id="playerFlow" class="player-flow hidden">
+          <div class="player-flow-head">
+            <h3>Raid Players</h3>
+            <p id="playerFlowStatus" class="hint">Build each player team from P1 to P4.</p>
+          </div>
+          <div id="playerTabs" class="player-tabs"></div>
+        </section>
+
+        <div class="team-input-tabs" role="tablist" aria-label="Team Input Methods">
+          <button
+            type="button"
+            id="teamInputTabPokepaste"
+            class="team-input-tab"
+            data-team-input-tab="pokepaste"
+            role="tab"
+            aria-selected="true"
+            aria-controls="teamInputPanelPokepaste"
+          >
+            Pokepaste Import
+          </button>
+          <button
+            type="button"
+            id="teamInputTabManual"
+            class="team-input-tab"
+            data-team-input-tab="manual"
+            role="tab"
+            aria-selected="false"
+            aria-controls="teamInputPanelManual"
+          >
+            Manual Builder
+          </button>
+          <button
+            type="button"
+            id="teamInputTabRaw"
+            class="team-input-tab"
+            data-team-input-tab="raw"
+            role="tab"
+            aria-selected="false"
+            aria-controls="teamInputPanelRaw"
+          >
+            Raw Import
+          </button>
+        </div>
+
+        <div class="team-input-panels">
+          <section
+            id="teamInputPanelPokepaste"
+            class="subpanel team-input-panel"
+            data-team-input-panel="pokepaste"
+            role="tabpanel"
+            aria-labelledby="teamInputTabPokepaste"
+          >
+            <h3>Import From Pokepaste</h3>
+            <label for="pokepasteInput">Pokepaste URL or ID</label>
+            <input
+              id="pokepasteInput"
+              type="text"
+              placeholder="https://pokepast.es/966581e37222b555 or 966581e37222b555"
+            />
+            <div class="actions">
+              <button type="button" id="loadPokepasteBtn" class="btn btn-primary">
+                Import Pokepaste
+              </button>
+              <button type="button" id="exampleTeamBtn" class="btn btn-ghost">
+                Load Example
+              </button>
+            </div>
+          </section>
+
+          <section
+            id="teamInputPanelManual"
+            class="subpanel team-input-panel hidden"
+            data-team-input-panel="manual"
+            role="tabpanel"
+            aria-labelledby="teamInputTabManual"
+          >
+            <h3>Add Team Slot</h3>
+            <p class="hint">Choose either exact Pokemon or a flexible type slot.</p>
+
+            <label for="slotMode">Slot Mode</label>
+            <select id="slotMode">
+              <option value="pokemon">Specific Pokemon</option>
+              <option value="type">Flexible Type Slot</option>
+            </select>
+
+            <div id="slotPokemonRow">
+              <label for="pokemonInput">Pokemon</label>
+              <input
+                id="pokemonInput"
+                type="text"
+                placeholder="Type any Pokemon name, e.g. Rotom-Wash"
+              />
+
+              <label for="abilityInput">Ability (Optional)</label>
+              <input id="abilityInput" type="text" placeholder="e.g. Intimidate" />
+
+              <label for="natureInput">Nature (Optional)</label>
+              <select id="natureInput">
+                <option value="">Select Nature</option>
+                <option value="Adamant">Adamant</option>
+                <option value="Bashful">Bashful</option>
+                <option value="Bold">Bold</option>
+                <option value="Brave">Brave</option>
+                <option value="Calm">Calm</option>
+                <option value="Careful">Careful</option>
+                <option value="Docile">Docile</option>
+                <option value="Gentle">Gentle</option>
+                <option value="Hardy">Hardy</option>
+                <option value="Hasty">Hasty</option>
+                <option value="Impish">Impish</option>
+                <option value="Jolly">Jolly</option>
+                <option value="Lax">Lax</option>
+                <option value="Lonely">Lonely</option>
+                <option value="Mild">Mild</option>
+                <option value="Modest">Modest</option>
+                <option value="Naive">Naive</option>
+                <option value="Naughty">Naughty</option>
+                <option value="Quiet">Quiet</option>
+                <option value="Quirky">Quirky</option>
+                <option value="Rash">Rash</option>
+                <option value="Relaxed">Relaxed</option>
+                <option value="Sassy">Sassy</option>
+                <option value="Serious">Serious</option>
+                <option value="Timid">Timid</option>
+              </select>
+
+              <label>EVs (Optional)</label>
+              <div class="stat-grid">
+                <input id="evHpInput" type="number" min="0" max="252" step="4" inputmode="numeric" placeholder="HP" />
+                <input id="evAtkInput" type="number" min="0" max="252" step="4" inputmode="numeric" placeholder="Atk" />
+                <input id="evDefInput" type="number" min="0" max="252" step="4" inputmode="numeric" placeholder="Def" />
+                <input id="evSpAInput" type="number" min="0" max="252" step="4" inputmode="numeric" placeholder="SpA" />
+                <input id="evSpDInput" type="number" min="0" max="252" step="4" inputmode="numeric" placeholder="SpD" />
+                <input id="evSpeInput" type="number" min="0" max="252" step="4" inputmode="numeric" placeholder="Spe" />
+              </div>
+
+              <label>IVs (Optional)</label>
+              <div class="stat-grid">
+                <input id="ivHpInput" type="number" min="0" max="31" step="1" inputmode="numeric" placeholder="HP" />
+                <input id="ivAtkInput" type="number" min="0" max="31" step="1" inputmode="numeric" placeholder="Atk" />
+                <input id="ivDefInput" type="number" min="0" max="31" step="1" inputmode="numeric" placeholder="Def" />
+                <input id="ivSpAInput" type="number" min="0" max="31" step="1" inputmode="numeric" placeholder="SpA" />
+                <input id="ivSpDInput" type="number" min="0" max="31" step="1" inputmode="numeric" placeholder="SpD" />
+                <input id="ivSpeInput" type="number" min="0" max="31" step="1" inputmode="numeric" placeholder="Spe" />
+              </div>
+            </div>
+
+            <div id="slotTypeRow" class="hidden">
+              <label for="typeSelect">Type</label>
+              <select id="typeSelect"></select>
+
+              <label for="typeSelectSecondary">Optional Second Type</label>
+              <select id="typeSelectSecondary"></select>
+
+              <div id="typeBadgePreview" class="type-badge-preview"></div>
+
+              <label for="typeAbilityInput">Ability (Optional)</label>
+              <input id="typeAbilityInput" type="text" placeholder="e.g. Flash Fire" />
+            </div>
+
+            <label for="itemInput">Item (Optional)</label>
+            <input id="itemInput" type="text" placeholder="e.g. Choice Scarf" />
+
+            <label for="move1Input">Moves (1-4 Optional)</label>
+            <div class="move-grid">
+              <input id="move1Input" type="text" placeholder="Move 1" />
+              <input id="move2Input" type="text" placeholder="Move 2" />
+              <input id="move3Input" type="text" placeholder="Move 3" />
+              <input id="move4Input" type="text" placeholder="Move 4" />
+            </div>
+
+            <label for="slotNoteInput">Extra Note (Optional)</label>
+            <input
+              id="slotNoteInput"
+              type="text"
+              placeholder="e.g. Speed > 209, must survive +2 hit"
+            />
+
+            <div class="actions">
+              <button type="button" id="addSlotBtn" class="btn btn-primary">Add Slot</button>
+              <button type="button" id="removeLastSlotBtn" class="btn btn-ghost">
+                Remove Last
+              </button>
+            </div>
+            <p id="manualBuilderStatus" class="status manual-builder-status" aria-live="polite"></p>
+          </section>
+
+          <section
+            id="teamInputPanelRaw"
+            class="subpanel team-input-panel hidden"
+            data-team-input-panel="raw"
+            role="tabpanel"
+            aria-labelledby="teamInputTabRaw"
+          >
+            <h3>Raw Showdown Import</h3>
+            <div class="raw-input-head">
+              <label for="rawTeamInput">Raw Showdown Team</label>
+              <div class="snippet-copy-actions">
+                <button type="button" id="copyRawBtn" class="snippet-copy-btn">
+                  Copy Current
+                </button>
+                <button type="button" id="copyAllRawBtn" class="snippet-copy-btn">
+                  Copy All
+                </button>
+              </div>
+            </div>
+            <textarea
+              id="rawTeamInput"
+              rows="10"
+              placeholder="Garchomp @ Choice Scarf&#10;Ability: Rough Skin&#10;EVs: 252 Atk / 4 SpD / 252 Spe&#10;Jolly Nature&#10;- Earthquake&#10;- Dragon Claw"
+            ></textarea>
+            <div class="actions">
+              <button type="button" id="renderRawBtn" class="btn btn-primary">
+                Render Raw Team
+              </button>
+              <button type="button" id="renderAllRawBtn" class="btn btn-ghost">
+                Load All P1-P4 Raw
+              </button>
+              <button type="button" id="clearTeamBtn" class="btn btn-ghost">
+                Clear Team
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <p id="teamInputStatus" class="status team-input-status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-title-wrap">
+          <h2 id="teamBoardTitle">Player Team Preview</h2>
+          <p id="teamMeta">No team loaded yet.</p>
+        </div>
+        <section id="teamBoard" class="team-board" aria-live="polite"></section>
+        <div class="actions">
+          <button id="continueToPlannerBtn" type="button" class="btn btn-primary">
+            Continue To Turn Planner
+          </button>
+        </div>
+      </section>
+      </section>
+
+      <section id="turn-planner-step" class="panel hidden">
+        <div class="panel-title-wrap">
+          <h2>Step 3 - Turn Planner</h2>
+          <p>Add turn-by-turn actions before generating export output.</p>
+        </div>
+
+        <section class="planner-wrap">
+          <div class="planner-head">
+            <h3>Turn Planner</h3>
+            <p>Free-text per player action, with a dedicated FF/Notes column.</p>
+          </div>
+          <div class="planner-tools actions">
+            <button id="addTurnRowBtn" type="button" class="btn btn-ghost">Add Turn Row</button>
+          </div>
+          <div class="planner-table-wrap">
+            <div id="turnPlannerTable" class="planner-editor" aria-live="polite"></div>
+          </div>
+        </section>
+        <div class="actions">
+          <button id="continueToExportBtn" type="button" class="btn btn-primary">
+            Continue To Export & Preview
+          </button>
+        </div>
+      </section>
+
+      <section id="preview-export-step" class="panel hidden">
+        <div class="panel-title-wrap">
+          <h2>Step 4 - Export & Preview</h2>
+          <p>Review the final guide and export as watermarked HTML.</p>
+        </div>
+
+        <article id="guidePreview" class="guide-preview">
+          <p class="preview-empty">
+            Complete previous steps to generate preview.
+          </p>
+        </article>
+
+        <div class="actions">
+          <button id="exportHtmlBtn" type="button" class="btn btn-primary">
+            Export HTML
+          </button>
+          <span id="exportStatus" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-copy">
+        <p>&copy; 2026 pampaks. All rights reserved.</p>
+      </div>
+      <div class="footer-links" aria-label="External links">
+        <a class="footer-link" href="https://discord.com/users/326092496528605185" target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M20.317 4.369A19.791 19.791 0 0 0 15.885 3a13.915 13.915 0 0 0-.698 1.448 18.27 18.27 0 0 0-6.374 0A13.724 13.724 0 0 0 8.115 3a19.736 19.736 0 0 0-4.433 1.369C.533 9.045-.32 13.58.099 18.057A19.9 19.9 0 0 0 5.993 21a14.16 14.16 0 0 0 1.274-2.05 12.99 12.99 0 0 1-2.04-.98c.171-.127.338-.259.5-.395 3.93 1.85 8.18 1.85 12.063 0 .163.136.33.268.5.395a12.95 12.95 0 0 1-2.043.981A14.06 14.06 0 0 0 17.521 21a19.84 19.84 0 0 0 5.894-2.943c.492-5.177-.84-9.673-3.098-13.688ZM8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419 0-1.334.955-2.419 2.157-2.419 1.212 0 2.177 1.095 2.157 2.419 0 1.334-.955 2.419-2.157 2.419Zm7.96 0c-1.182 0-2.157-1.085-2.157-2.419 0-1.334.955-2.419 2.157-2.419 1.212 0 2.177 1.095 2.157 2.419 0 1.334-.945 2.419-2.157 2.419Z"
+            />
+          </svg>
+          <span>pampaks</span>
+        </a>
+        <a class="footer-link" href="https://forums.pokemmo.com/index.php?/profile/564170-pampaks/" target="_blank" rel="noreferrer">
+          <img class="footer-link-image" src="./assets/pokemmo.png" alt="" aria-hidden="true" />
+          <span>PokeMMO Forums</span>
+        </a>
+        <a class="footer-link" href="https://github.com/pampaks/" target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 .5C5.649.5.5 5.8.5 12.338c0 5.23 3.292 9.668 7.86 11.234.575.11.785-.255.785-.567 0-.28-.01-1.022-.016-2.006-3.197.71-3.872-1.58-3.872-1.58-.523-1.365-1.278-1.729-1.278-1.729-1.045-.733.08-.718.08-.718 1.156.084 1.765 1.233 1.765 1.233 1.027 1.81 2.695 1.287 3.352.985.104-.766.402-1.287.731-1.583-2.552-.3-5.236-1.314-5.236-5.848 0-1.292.447-2.348 1.18-3.176-.118-.3-.512-1.508.112-3.145 0 0 .964-.316 3.16 1.213a10.73 10.73 0 0 1 5.75 0c2.194-1.529 3.157-1.213 3.157-1.213.626 1.637.232 2.845.114 3.145.736.828 1.179 1.884 1.179 3.176 0 4.545-2.689 5.544-5.25 5.838.413.366.781 1.09.781 2.198 0 1.587-.014 2.867-.014 3.257 0 .315.207.683.79.566 4.563-1.569 7.853-6.005 7.853-11.232C23.5 5.8 18.351.5 12 .5Z"
+            />
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </footer>
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>
