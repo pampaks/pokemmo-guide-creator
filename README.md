@@ -111,7 +111,7 @@ No build step is required.
 1. Clone the repo:
 
 ```bash
-git clone https://github.com/andreasparaskeva/pokemmo-guide-creator.git
+git clone https://github.com/pampaks/pokemmo-guide-creator.git
 cd pokemmo-guide-creator
 ```
 
@@ -134,7 +134,7 @@ Opening the HTML directly is not recommended because ES modules and asset paths 
 This site is designed to run directly on GitHub Pages.
 
 Deployment URL:
-https://andreasparaskeva.github.io/pokemmo-guide-creator/
+https://pampaks.github.io/pokemmo-guide-creator/
 
 Notes:
 

@@ -2,6 +2,9 @@ const Background = (() => {
   let canvas;
   let ctx;
   let nodes = [];
+  let constellationImage;
+  let constellationImageLoaded = false;
+  let constellationSprites = [];
   let animationId = 0;
   let initialized = false;
   let running = false;
@@ -14,7 +17,11 @@ const Background = (() => {
     x: 0,
     y: 0,
     active: false,
-    influence: 0
+    influence: 0,
+    spriteTargetX: 0,
+    spriteTargetY: 0,
+    spriteOffsetX: 0,
+    spriteOffsetY: 0
   };
 
   const palette = {
@@ -38,7 +45,13 @@ const Background = (() => {
     maxMouseRadius: 220,
     nodeDensity: 0.000055,
     minNodes: 48,
-    maxNodes: 132
+    maxNodes: 132,
+    minConstellations: 12,
+    maxConstellations: 15,
+    minConstellationWidth: 84,
+    maxConstellationWidth: 220,
+    minConstellationSpeed: 0.018,
+    maxConstellationSpeed: 0.075
   };
 
   function clamp(value, min, max) {
@@ -96,6 +109,14 @@ const Background = (() => {
     return clamp(count, CONFIG.minNodes, CONFIG.maxNodes);
   }
 
+  function getConstellationCount() {
+    if (width >= 1500 || height >= 950) {
+      return CONFIG.maxConstellations;
+    }
+
+    return CONFIG.minConstellations;
+  }
+
   function createNode() {
     const variant = Math.random() > 0.8 ? "star" : "dot";
     const useAccent = Math.random() > 0.5;
@@ -115,6 +136,91 @@ const Background = (() => {
 
   function createNodes() {
     nodes = Array.from({ length: getNodeCount() }, createNode);
+  }
+
+  function loadConstellationImage() {
+    if (constellationImage) {
+      return;
+    }
+
+    constellationImage = new Image();
+    constellationImage.decoding = "async";
+    constellationImage.addEventListener("load", () => {
+      constellationImageLoaded = true;
+      createConstellationSprites();
+    });
+    constellationImage.src = new URL("../../assets/image.png", import.meta.url).href;
+  }
+
+  function getConstellationSpriteRadius(sprite) {
+    return Math.max(sprite.width, sprite.height) * 0.42;
+  }
+
+  function findConstellationPosition(sprite, existing) {
+    let fallback = {
+      x: Math.random() * width,
+      y: Math.random() * height
+    };
+
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const candidate = {
+        x: randomBetween(sprite.width * 0.5, Math.max(sprite.width * 0.5, width - sprite.width * 0.5)),
+        y: randomBetween(sprite.height * 0.5, Math.max(sprite.height * 0.5, height - sprite.height * 0.5))
+      };
+      fallback = candidate;
+
+      const spriteRadius = getConstellationSpriteRadius(sprite);
+      const overlaps = existing.some((other) => {
+        const distance = Math.hypot(candidate.x - other.x, candidate.y - other.y);
+        return distance < spriteRadius + getConstellationSpriteRadius(other) + 26;
+      });
+
+      if (!overlaps) {
+        return candidate;
+      }
+    }
+
+    return fallback;
+  }
+
+  function createConstellationSprite(existing) {
+    const depth = randomBetween(0.58, 1.12);
+    const aspectRatio = constellationImage.naturalHeight / constellationImage.naturalWidth;
+    const widthScale = randomBetween(CONFIG.minConstellationWidth, CONFIG.maxConstellationWidth) * depth;
+    const heightScale = widthScale * aspectRatio;
+    const sprite = {
+      depth,
+      width: widthScale,
+      height: heightScale,
+      vx: randomBetween(CONFIG.minConstellationSpeed, CONFIG.maxConstellationSpeed) * depth * randomSign(),
+      vy: randomBetween(CONFIG.minConstellationSpeed * 0.2, CONFIG.maxConstellationSpeed * 0.45) * depth * randomSign(),
+      swayX: randomBetween(8, 24) * (1.3 - depth * 0.28),
+      swayY: randomBetween(4, 16) * (1.25 - depth * 0.24),
+      phase: Math.random() * Math.PI * 2,
+      phaseSpeed: randomBetween(0.0015, 0.004) * (1.2 - depth * 0.12),
+      opacity: 0.12 + depth * 0.18,
+      glow: 4 + depth * 7
+    };
+
+    const position = findConstellationPosition(sprite, existing);
+    sprite.x = position.x;
+    sprite.y = position.y;
+    return sprite;
+  }
+
+  function createConstellationSprites() {
+    if (!constellationImageLoaded || !width || !height) {
+      return;
+    }
+
+    const next = [];
+    const spriteCount = getConstellationCount();
+
+    for (let index = 0; index < spriteCount; index += 1) {
+      next.push(createConstellationSprite(next));
+    }
+
+    constellationSprites = next.sort((a, b) => a.depth - b.depth);
   }
 
   function createCanvas() {
@@ -152,6 +258,7 @@ const Background = (() => {
     canvas.height = Math.floor(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     createNodes();
+    createConstellationSprites();
   }
 
   function updatePalette() {
@@ -195,10 +302,14 @@ const Background = (() => {
     mouse.y = event.clientY;
     mouse.active = true;
     mouse.influence = 1;
+    mouse.spriteTargetX = (event.clientX - width * 0.5) / Math.max(width, 1);
+    mouse.spriteTargetY = (event.clientY - height * 0.5) / Math.max(height, 1);
   }
 
   function handlePointerLeave() {
     mouse.active = false;
+    mouse.spriteTargetX = 0;
+    mouse.spriteTargetY = 0;
   }
 
   function applyMouseInfluence(node) {
@@ -222,6 +333,8 @@ const Background = (() => {
 
   function updateNodes() {
     mouse.influence += ((mouse.active ? 1 : 0) - mouse.influence) * 0.08;
+    mouse.spriteOffsetX += (mouse.spriteTargetX - mouse.spriteOffsetX) * 0.08;
+    mouse.spriteOffsetY += (mouse.spriteTargetY - mouse.spriteOffsetY) * 0.08;
 
     for (const node of nodes) {
       applyMouseInfluence(node);
@@ -244,6 +357,26 @@ const Background = (() => {
       if (node.x > width + 20) node.x = -20;
       if (node.y < -20) node.y = height + 20;
       if (node.y > height + 20) node.y = -20;
+    }
+  }
+
+  function updateConstellationSprites() {
+    if (!constellationImageLoaded) {
+      return;
+    }
+
+    for (const sprite of constellationSprites) {
+      sprite.x += sprite.vx;
+      sprite.y += sprite.vy;
+      sprite.phase += sprite.phaseSpeed;
+
+      const wrapX = sprite.width * 0.6;
+      const wrapY = sprite.height * 0.6;
+
+      if (sprite.x < -wrapX) sprite.x = width + wrapX;
+      if (sprite.x > width + wrapX) sprite.x = -wrapX;
+      if (sprite.y < -wrapY) sprite.y = height + wrapY;
+      if (sprite.y > height + wrapY) sprite.y = -wrapY;
     }
   }
 
@@ -340,6 +473,36 @@ const Background = (() => {
     ctx.shadowColor = "transparent";
   }
 
+  function drawConstellationSprites() {
+    if (!constellationImageLoaded || !constellationSprites.length) {
+      return;
+    }
+
+    for (const sprite of constellationSprites) {
+      const driftX = Math.sin(sprite.phase) * sprite.swayX;
+      const driftY = Math.cos(sprite.phase * 1.12) * sprite.swayY;
+      const parallaxX = mouse.spriteOffsetX * 10 * sprite.depth;
+      const parallaxY = mouse.spriteOffsetY * 6 * sprite.depth;
+      const shimmer = (Math.sin(sprite.phase * 1.7) + 1) * 0.5;
+
+      ctx.save();
+      ctx.globalAlpha = clamp(sprite.opacity + shimmer * 0.06, 0.1, 0.38);
+      ctx.shadowBlur = sprite.glow;
+      ctx.shadowColor = alpha(palette.highlightBase, 0.12 + sprite.depth * 0.08);
+      ctx.drawImage(
+        constellationImage,
+        sprite.x - sprite.width * 0.5 + driftX + parallaxX,
+        sprite.y - sprite.height * 0.5 + driftY + parallaxY,
+        sprite.width,
+        sprite.height
+      );
+      ctx.restore();
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+  }
+
   function render() {
     if (!running || !ctx) {
       return;
@@ -350,6 +513,8 @@ const Background = (() => {
     ctx.fillRect(0, 0, width, height);
 
     updateNodes();
+    updateConstellationSprites();
+    drawConstellationSprites();
     drawConnections();
     drawNodes();
 
@@ -371,6 +536,7 @@ const Background = (() => {
     initialized = true;
     createCanvas();
     createNodes();
+    loadConstellationImage();
     updatePalette();
     observeTheme();
     addListeners();
