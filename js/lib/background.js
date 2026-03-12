@@ -149,7 +149,7 @@ const Background = (() => {
       constellationImageLoaded = true;
       createConstellationSprites();
     });
-    constellationImage.src = new URL("../../assets/image.png", import.meta.url).href;
+    constellationImage.src = new URL("../../assets/pory-constellation.png", import.meta.url).href;
   }
 
   function getConstellationSpriteRadius(sprite) {
