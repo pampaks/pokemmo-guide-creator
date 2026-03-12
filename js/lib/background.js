@@ -17,11 +17,7 @@ const Background = (() => {
     x: 0,
     y: 0,
     active: false,
-    influence: 0,
-    spriteTargetX: 0,
-    spriteTargetY: 0,
-    spriteOffsetX: 0,
-    spriteOffsetY: 0
+    influence: 0
   };
 
   const palette = {
@@ -46,10 +42,10 @@ const Background = (() => {
     nodeDensity: 0.000055,
     minNodes: 48,
     maxNodes: 132,
-    minConstellations: 12,
+    minConstellations: 10,
     maxConstellations: 15,
-    minConstellationWidth: 84,
-    maxConstellationWidth: 220,
+    minConstellationWidth: 110,
+    maxConstellationWidth: 280,
     minConstellationSpeed: 0.018,
     maxConstellationSpeed: 0.075
   };
@@ -184,7 +180,7 @@ const Background = (() => {
   }
 
   function createConstellationSprite(existing) {
-    const depth = randomBetween(0.58, 1.12);
+    const depth = randomBetween(0.48, 1.04);
     const aspectRatio = constellationImage.naturalHeight / constellationImage.naturalWidth;
     const widthScale = randomBetween(CONFIG.minConstellationWidth, CONFIG.maxConstellationWidth) * depth;
     const heightScale = widthScale * aspectRatio;
@@ -198,6 +194,8 @@ const Background = (() => {
       swayY: randomBetween(4, 16) * (1.25 - depth * 0.24),
       phase: Math.random() * Math.PI * 2,
       phaseSpeed: randomBetween(0.0015, 0.004) * (1.2 - depth * 0.12),
+      rotation: randomBetween(-Math.PI * 0.12, Math.PI * 0.12),
+      rotationSpeed: randomBetween(0.0004, 0.0012) * randomSign() * (1.18 - depth * 0.18),
       opacity: 0.12 + depth * 0.18,
       glow: 4 + depth * 7
     };
@@ -221,6 +219,75 @@ const Background = (() => {
     }
 
     constellationSprites = next.sort((a, b) => a.depth - b.depth);
+  }
+
+  function normalizeConstellationVelocity(sprite) {
+    const minSpeed = CONFIG.minConstellationSpeed * 0.75 * Math.max(sprite.depth, 0.55);
+    const maxSpeed = CONFIG.maxConstellationSpeed * 1.15 * Math.max(sprite.depth, 0.55);
+    const speed = Math.hypot(sprite.vx, sprite.vy);
+
+    if (speed === 0) {
+      sprite.vx = minSpeed * randomSign();
+      sprite.vy = minSpeed * randomSign() * 0.65;
+      return;
+    }
+
+    const clampedSpeed = clamp(speed, minSpeed, maxSpeed);
+    if (clampedSpeed !== speed) {
+      const ratio = clampedSpeed / speed;
+      sprite.vx *= ratio;
+      sprite.vy *= ratio;
+    }
+  }
+
+  function resolveConstellationCollisions() {
+    for (let i = 0; i < constellationSprites.length; i += 1) {
+      const a = constellationSprites[i];
+
+      for (let j = i + 1; j < constellationSprites.length; j += 1) {
+        const b = constellationSprites[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let distance = Math.hypot(dx, dy);
+        const minDistance = getConstellationSpriteRadius(a) + getConstellationSpriteRadius(b);
+
+        if (distance >= minDistance) {
+          continue;
+        }
+
+        if (distance === 0) {
+          dx = randomSign();
+          dy = randomSign();
+          distance = Math.hypot(dx, dy);
+        }
+
+        const nx = dx / distance;
+        const ny = dy / distance;
+        const overlap = (minDistance - distance) * 0.5;
+
+        a.x -= nx * overlap;
+        a.y -= ny * overlap;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+
+        const aNormal = a.vx * nx + a.vy * ny;
+        const bNormal = b.vx * nx + b.vy * ny;
+        const aTangentX = a.vx - nx * aNormal;
+        const aTangentY = a.vy - ny * aNormal;
+        const bTangentX = b.vx - nx * bNormal;
+        const bTangentY = b.vy - ny * bNormal;
+
+        a.vx = aTangentX + nx * bNormal;
+        a.vy = aTangentY + ny * bNormal;
+        b.vx = bTangentX + nx * aNormal;
+        b.vy = bTangentY + ny * aNormal;
+
+        a.rotationSpeed += randomBetween(-0.00008, 0.00008);
+        b.rotationSpeed += randomBetween(-0.00008, 0.00008);
+        normalizeConstellationVelocity(a);
+        normalizeConstellationVelocity(b);
+      }
+    }
   }
 
   function createCanvas() {
@@ -302,14 +369,10 @@ const Background = (() => {
     mouse.y = event.clientY;
     mouse.active = true;
     mouse.influence = 1;
-    mouse.spriteTargetX = (event.clientX - width * 0.5) / Math.max(width, 1);
-    mouse.spriteTargetY = (event.clientY - height * 0.5) / Math.max(height, 1);
   }
 
   function handlePointerLeave() {
     mouse.active = false;
-    mouse.spriteTargetX = 0;
-    mouse.spriteTargetY = 0;
   }
 
   function applyMouseInfluence(node) {
@@ -333,8 +396,6 @@ const Background = (() => {
 
   function updateNodes() {
     mouse.influence += ((mouse.active ? 1 : 0) - mouse.influence) * 0.08;
-    mouse.spriteOffsetX += (mouse.spriteTargetX - mouse.spriteOffsetX) * 0.08;
-    mouse.spriteOffsetY += (mouse.spriteTargetY - mouse.spriteOffsetY) * 0.08;
 
     for (const node of nodes) {
       applyMouseInfluence(node);
@@ -369,6 +430,7 @@ const Background = (() => {
       sprite.x += sprite.vx;
       sprite.y += sprite.vy;
       sprite.phase += sprite.phaseSpeed;
+      sprite.rotation += sprite.rotationSpeed;
 
       const wrapX = sprite.width * 0.6;
       const wrapY = sprite.height * 0.6;
@@ -378,6 +440,8 @@ const Background = (() => {
       if (sprite.y < -wrapY) sprite.y = height + wrapY;
       if (sprite.y > height + wrapY) sprite.y = -wrapY;
     }
+
+    resolveConstellationCollisions();
   }
 
   function drawConnections() {
@@ -481,18 +545,21 @@ const Background = (() => {
     for (const sprite of constellationSprites) {
       const driftX = Math.sin(sprite.phase) * sprite.swayX;
       const driftY = Math.cos(sprite.phase * 1.12) * sprite.swayY;
-      const parallaxX = mouse.spriteOffsetX * 10 * sprite.depth;
-      const parallaxY = mouse.spriteOffsetY * 6 * sprite.depth;
       const shimmer = (Math.sin(sprite.phase * 1.7) + 1) * 0.5;
+      const drawX = sprite.x + driftX;
+      const drawY = sprite.y + driftY;
+      const tilt = Math.sin(sprite.phase * 0.65) * 0.035;
 
       ctx.save();
       ctx.globalAlpha = clamp(sprite.opacity + shimmer * 0.06, 0.1, 0.38);
       ctx.shadowBlur = sprite.glow;
       ctx.shadowColor = alpha(palette.highlightBase, 0.12 + sprite.depth * 0.08);
+      ctx.translate(drawX, drawY);
+      ctx.rotate(sprite.rotation + tilt);
       ctx.drawImage(
         constellationImage,
-        sprite.x - sprite.width * 0.5 + driftX + parallaxX,
-        sprite.y - sprite.height * 0.5 + driftY + parallaxY,
+        -sprite.width * 0.5,
+        -sprite.height * 0.5,
         sprite.width,
         sprite.height
       );
