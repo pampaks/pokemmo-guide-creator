@@ -1021,6 +1021,7 @@ textarea {
   border-radius: 12px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   color: #fff;
   font-weight: 700;
   font-size: 1.25rem;
@@ -1035,24 +1036,30 @@ textarea {
 }
 
 .type-avatar-dual {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .type-avatar-icon {
-  position: absolute;
   width: 28px;
   height: 28px;
   object-fit: contain;
 }
 
+.type-avatar-dual .type-avatar-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
 .type-avatar-icon-primary {
-  top: 10px;
-  left: 10px;
+  transform: translateY(-3px);
 }
 
 .type-avatar-icon-secondary {
-  right: 10px;
-  bottom: 10px;
+  transform: translateY(3px);
 }
 
 .type-slot {

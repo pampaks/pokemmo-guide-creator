@@ -67,23 +67,23 @@ function renderTypeAvatar(slot) {
     avatar.style.setProperty("--type-accent-secondary", slot.secondaryAccentColor);
   }
 
-  if (slot.secondaryIconUrl) {
+  if (slot.secondaryIconUrl && slot.iconUrl) {
     const primaryIcon = document.createElement("img");
-    primaryIcon.src = slot.iconUrl || "";
+    primaryIcon.src = normalizeTypeIconSource(slot.iconUrl);
     primaryIcon.alt = `${slot.typeName} icon`;
     primaryIcon.loading = "lazy";
     primaryIcon.className = "type-avatar-icon type-avatar-icon-primary";
     avatar.appendChild(primaryIcon);
 
     const secondaryIcon = document.createElement("img");
-    secondaryIcon.src = slot.secondaryIconUrl;
+    secondaryIcon.src = normalizeTypeIconSource(slot.secondaryIconUrl);
     secondaryIcon.alt = `${getTypeSlotNames(slot)[1] || "Secondary"} icon`;
     secondaryIcon.loading = "lazy";
     secondaryIcon.className = "type-avatar-icon type-avatar-icon-secondary";
     avatar.appendChild(secondaryIcon);
   } else if (slot.iconUrl) {
     const icon = document.createElement("img");
-    icon.src = slot.iconUrl;
+    icon.src = normalizeTypeIconSource(slot.iconUrl);
     icon.alt = `${slot.typeName} icon`;
     icon.loading = "lazy";
     avatar.appendChild(icon);
@@ -92,6 +92,24 @@ function renderTypeAvatar(slot) {
   }
 
   return avatar;
+}
+
+function normalizeTypeIconSource(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "pokedb.org" && url.pathname === "/_next/image") {
+      return url.searchParams.get("url") || raw;
+    }
+  } catch {
+    return raw;
+  }
+
+  return raw;
 }
 
 function renderTypeCard(slot) {

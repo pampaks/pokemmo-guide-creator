@@ -24,6 +24,14 @@ function resolveExportAssetUrl(value) {
   if (!raw) {
     return "";
   }
+  try {
+    const parsed = new URL(raw);
+    if (parsed.hostname === "pokedb.org" && parsed.pathname === "/_next/image") {
+      return parsed.searchParams.get("url") || raw;
+    }
+  } catch {
+    // Fall through to the existing resolution logic for relative URLs.
+  }
   if (/^(?:https?:)?\/\//i.test(raw) || /^data:/i.test(raw)) {
     return raw;
   }
@@ -250,12 +258,19 @@ function renderPlayerTeamCards(team) {
         const accent = escapeHtml(slot.accentColor || "#6176d8");
         const secondaryAccent = escapeHtml(slot.secondaryAccentColor || "#2c355f");
         const hasDualType = Boolean(slot.secondaryIconUrl);
-        const primaryIconUrl = escapeHtml(resolveExportAssetUrl(slot.iconUrl));
-        const secondaryIconUrl = escapeHtml(resolveExportAssetUrl(slot.secondaryIconUrl));
+        const primaryCandidates = getTypeIconExportCandidates(slot.iconUrl, slot.typeName);
+        const secondaryCandidates = getTypeIconExportCandidates(
+          slot.secondaryIconUrl,
+          getTypeSlotNames(slot)[1] || ""
+        );
+        const primaryIconUrl = escapeHtml(primaryCandidates[0] || "");
+        const secondaryIconUrl = escapeHtml(secondaryCandidates[0] || "");
+        const primaryExportCandidates = escapeHtml(primaryCandidates.join("\n"));
+        const secondaryExportCandidates = escapeHtml(secondaryCandidates.join("\n"));
         const icon = hasDualType
-          ? `<img class="preview-type-icon preview-type-icon-primary" src="${primaryIconUrl}" alt="${escapeHtml(slot.typeName)} icon" loading="lazy"><img class="preview-type-icon preview-type-icon-secondary" src="${secondaryIconUrl}" alt="${escapeHtml(getTypeSlotNames(slot)[1] || "Secondary")} icon" loading="lazy">`
-          : slot.iconUrl
-            ? `<img class="preview-type-icon" src="${primaryIconUrl}" alt="${escapeHtml(slot.typeName)} icon" loading="lazy">`
+          ? `<img class="preview-type-icon preview-type-icon-primary" src="${primaryIconUrl}" data-export-candidates="${primaryExportCandidates}" alt="${escapeHtml(slot.typeName)} icon" loading="lazy"><img class="preview-type-icon preview-type-icon-secondary" src="${secondaryIconUrl}" data-export-candidates="${secondaryExportCandidates}" alt="${escapeHtml(getTypeSlotNames(slot)[1] || "Secondary")} icon" loading="lazy">`
+          : primaryCandidates.length
+            ? `<img class="preview-type-icon" src="${primaryIconUrl}" data-export-candidates="${primaryExportCandidates}" alt="${escapeHtml(slot.typeName)} icon" loading="lazy">`
             : `<span class="preview-type-fallback">${escapeHtml((slot.typeName || "?").slice(0, 1).toUpperCase())}</span>`;
         return `
           <article class="preview-slot preview-slot-type" style="--slot-accent:${accent};--slot-accent-secondary:${secondaryAccent}">
@@ -310,6 +325,22 @@ function renderPlayerTeamCards(team) {
     .join("");
 
   return `<div class="preview-team-grid">${cards}</div>`;
+}
+
+function getTypeIconExportCandidates(iconUrl, typeName) {
+  return [buildLocalTypeAssetUrl(typeName), resolveExportAssetUrl(iconUrl)].filter(
+    (url, index, list) => url && list.indexOf(url) === index
+  );
+}
+
+function buildLocalTypeAssetUrl(typeName) {
+  const slug = String(typeName || "")
+    .trim()
+    .toLowerCase();
+  if (!slug || slug === "support") {
+    return "";
+  }
+  return `./assets/types/${slug}.png`;
 }
 
 function renderPlayerTeamSections(players, options = {}) {
@@ -488,7 +519,6 @@ function buildForumPasteSlotHtml(slot) {
 
   if (slot.kind === "type") {
     const lines = [
-      buildMarkdownTypeSpriteHtml(slot),
       `<strong>${escapeHtml(getTypeSlotLabel(slot))}</strong>`,
       `<sub>${escapeHtml(getTypeSlotPokemonText(slot))}</sub>`
     ].filter(Boolean);
@@ -804,13 +834,17 @@ function buildThemeCss() {
       border-radius: 10px;
       display: grid;
       place-items: center;
+      overflow: hidden;
       color: #fff;
       font-weight: 700;
       font-size: 22px;
       background: rgba(255, 255, 255, 0.08);
     }
     .preview-type-avatar-dual {
-      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
     .preview-type-icon {
       width: 42px;
@@ -818,17 +852,15 @@ function buildThemeCss() {
       object-fit: contain;
     }
     .preview-type-avatar-dual .preview-type-icon {
-      position: absolute;
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
+      flex: 0 0 auto;
     }
     .preview-type-icon-primary {
-      top: 9px;
-      left: 9px;
+      transform: translateY(-3px);
     }
     .preview-type-icon-secondary {
-      right: 9px;
-      bottom: 9px;
+      transform: translateY(3px);
     }
     .preview-type-fallback {
       display: inline-block;
