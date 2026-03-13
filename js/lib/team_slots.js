@@ -40,10 +40,12 @@ export function hydrateTeamTypes(team, types) {
       ...slot,
       typeName: primaryTypeName,
       typeNames,
-      iconUrl: slot.iconUrl || primaryType?.iconUrl || "",
-      accentColor: slot.accentColor || primaryType?.accentColor || "",
-      secondaryIconUrl: slot.secondaryIconUrl || secondaryType?.iconUrl || "",
-      secondaryAccentColor: slot.secondaryAccentColor || secondaryType?.accentColor || ""
+      // Always derive presentation fields from known type metadata so imported JSON
+      // cannot inject arbitrary remote icons or CSS values into the UI/export path.
+      iconUrl: primaryType?.iconUrl || "",
+      accentColor: primaryType?.accentColor || "",
+      secondaryIconUrl: secondaryType?.iconUrl || "",
+      secondaryAccentColor: secondaryType?.accentColor || ""
     };
   });
 }

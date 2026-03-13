@@ -213,12 +213,90 @@ export function pokemonDbSpriteUrl(pokemonName, isShiny = false) {
   return `https://img.pokemondb.net/sprites/black-white/${folder}/${slug}.png`;
 }
 
-export function showdownSpriteUrl(pokemonName) {
-  const slug = pokemonDbSlug(pokemonName);
+const SHOWDOWN_SLUG_OVERRIDES = {
+  "Shaymin": "shaymin",
+  "Mr. Mime": "mrmime",
+  "Mime Jr.": "mimejr",
+  "Farfetch'd": "farfetchd",
+  "Nidoran-F": "nidoranf",
+  "Nidoran-M": "nidoranm",
+  "Nidoran Female": "nidoranf",
+  "Nidoran Male": "nidoranm",
+  "Type: Null": "typenull",
+  "Jangmo-o": "jangmoo",
+  "Hakamo-o": "hakamoo",
+  "Kommo-o": "kommoo",
+  "Tapu Koko": "tapukoko",
+  "Tapu Lele": "tapulele",
+  "Tapu Bulu": "tapubulu",
+  "Tapu Fini": "tapufini",
+  "Mr. Rime": "mrrime",
+  "Flab\u00e9b\u00e9": "flabebe",
+  "Zygarde 10%": "zygarde-10",
+  "Zygarde 50%": "zygarde",
+  "Zygarde Complete": "zygarde-complete",
+  "Ho-Oh": "hooh",
+  "Porygon-Z": "porygonz",
+  "Rockruff (Own Tempo)": "rockruff",
+  "Lycanroc (Midday)": "lycanroc",
+  "Lycanroc (Midnight)": "lycanroc-midnight",
+  "Lycanroc (Dusk)": "lycanroc-dusk",
+  "Rotom-Wash": "rotom-wash"
+};
+
+function normalizeSpeciesName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\u2019/g, "'")
+    .replace(/\u2640/g, "-F")
+    .replace(/\u2642/g, "-M");
+}
+
+export function showdownSpriteId(pokemonName) {
+  const normalized = normalizeSpeciesName(pokemonName);
+  if (!normalized) {
+    return "";
+  }
+
+  if (SHOWDOWN_SLUG_OVERRIDES[normalized]) {
+    return SHOWDOWN_SLUG_OVERRIDES[normalized];
+  }
+
+  const slug = pokemonDbSlug(normalized);
   if (!slug) {
     return "";
   }
-  return `https://play.pokemonshowdown.com/sprites/dex/${slug}.png`;
+
+  return slug
+    .replace(/^mr-mime(?=-|$)/, "mrmime")
+    .replace(/^mime-jr(?=-|$)/, "mimejr")
+    .replace(/^nidoran-f$/, "nidoranf")
+    .replace(/^nidoran-m$/, "nidoranm")
+    .replace(/^type-null(?=-|$)/, "typenull")
+    .replace(/^jangmo-o(?=-|$)/, "jangmoo")
+    .replace(/^hakamo-o(?=-|$)/, "hakamoo")
+    .replace(/^kommo-o(?=-|$)/, "kommoo")
+    .replace(/^tapu-koko(?=-|$)/, "tapukoko")
+    .replace(/^tapu-lele(?=-|$)/, "tapulele")
+    .replace(/^tapu-bulu(?=-|$)/, "tapubulu")
+    .replace(/^tapu-fini(?=-|$)/, "tapufini")
+    .replace(/^mr-rime(?=-|$)/, "mrrime")
+    .replace(/^ho-oh(?=-|$)/, "hooh")
+    .replace(/^porygon-z(?=-|$)/, "porygonz");
+}
+
+export function showdownSpriteUrl(pokemonName) {
+  const spriteId = showdownSpriteId(pokemonName);
+  if (!spriteId) {
+    return "";
+  }
+  return `https://play.pokemonshowdown.com/sprites/dex/${spriteId}.png`;
+}
+
+export function pokemonSpriteCandidates(pokemonName, isShiny = false) {
+  return [pokemonDbSpriteUrl(pokemonName, isShiny), showdownSpriteUrl(pokemonName)].filter(
+    (url, index, list) => url && list.indexOf(url) === index
+  );
 }
 
 export function extractPokepasteId(value) {

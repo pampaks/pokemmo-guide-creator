@@ -1,4 +1,4 @@
-import { pokemonDbSpriteUrl, showdownSpriteUrl } from "./pokemon.js";
+import { pokemonDbSlug, pokemonSpriteCandidates } from "./pokemon.js";
 import { getTypeSlotLabel, getTypeSlotNames, getTypeSlotPokemonText } from "./team_slots.js";
 
 function escapeHtml(value) {
@@ -37,6 +37,8 @@ function resolveExportAssetUrl(value) {
   return raw;
 }
 
+const FORUM_APP_URL = "https://pampaks.github.io/pokemmo-guide-creator/";
+
 export function normalizeFilename(value) {
   return String(value || "guide")
     .trim()
@@ -62,7 +64,7 @@ export function buildPreviewMarkup(meta, snapshot, columns, rows, options = {}) 
 
       <section>
         <h4 class="preview-section-title">Player Teams</h4>
-        ${renderPlayerTeamSections(players)}
+        ${renderPlayerTeamSections(players, options)}
       </section>
 
       <section>
@@ -103,6 +105,95 @@ export function buildMainExportHtml(meta, snapshot, columns, rows) {
   ${buildExportCopyScript()}
 </body>
 </html>`;
+}
+
+export function buildMarkdownExport(meta, snapshot, columns, rows) {
+  const players = getExportPlayers(snapshot);
+  const plannerRows = getRenderablePlannerRows(columns, rows);
+  const parts = [
+    `# ${escapeMarkdownText(meta?.strategyName || "Raid Guide")}`,
+    "",
+    `**Guide Type:** ${escapeMarkdownText(nonEmpty(meta?.guideType, "Raid"))}  `,
+    `**Author:** ${escapeMarkdownText(nonEmpty(meta?.authorName, "N/A"))}  `,
+    `**IGN:** ${escapeMarkdownText(nonEmpty(meta?.ignName, "N/A"))}`,
+    "",
+    `> ${escapeMarkdownBlock(meta?.description || "No description provided.")}`,
+    "",
+    "## Player Teams",
+    ""
+  ];
+
+  if (!players.length) {
+    parts.push("No player teams configured yet.");
+    parts.push("");
+  } else {
+    parts.push(...buildMarkdownTeamTable(players));
+    parts.push("");
+  }
+
+  parts.push("## Turn-by-Turn Plan");
+  parts.push("");
+  parts.push(...buildMarkdownPlanner(columns, plannerRows));
+  parts.push("");
+  parts.push(`For more creations: [PokeMMO Guide Creator](${FORUM_APP_URL})`);
+
+  return `${parts.join("\n").trim()}\n`;
+}
+
+export function buildForumPasteHtml(meta, snapshot, columns, rows) {
+  const players = getExportPlayers(snapshot);
+  const plannerRows = getRenderablePlannerRows(columns, rows);
+  const parts = [
+    `<h1>${escapeHtml(meta?.strategyName || "Raid Guide")}</h1>`,
+    `<p><strong>Guide Type:</strong> ${escapeHtml(nonEmpty(meta?.guideType, "Raid"))}<br><strong>Author:</strong> ${escapeHtml(
+      nonEmpty(meta?.authorName, "N/A")
+    )}<br><strong>IGN:</strong> ${escapeHtml(nonEmpty(meta?.ignName, "N/A"))}</p>`,
+    `<blockquote><p>${escapeHtml(nonEmpty(meta?.description, "No description provided.")).replace(/\n/g, "<br>")}</p></blockquote>`,
+    "<h2>Player Teams</h2>",
+    buildForumPasteTeamTable(players),
+    "<h2>Turn-by-Turn Plan</h2>",
+    buildForumPastePlannerTable(columns, plannerRows),
+    `<p>For more creations: <a href="${escapeHtml(FORUM_APP_URL)}">PokeMMO Guide Creator</a></p>`
+  ];
+  return parts.join("\n");
+}
+
+export async function copyRichContentToClipboard(html, text) {
+  const safeHtml = String(html || "");
+  const safeText = String(text || "");
+
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard?.write &&
+    typeof ClipboardItem !== "undefined"
+  ) {
+    const item = new ClipboardItem({
+      "text/html": new Blob([safeHtml], { type: "text/html" }),
+      "text/plain": new Blob([safeText], { type: "text/plain" })
+    });
+    await navigator.clipboard.write([item]);
+    return "html";
+  }
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(safeText);
+    return "text";
+  }
+
+  const area = document.createElement("textarea");
+  area.value = safeText;
+  area.setAttribute("readonly", "true");
+  area.style.position = "fixed";
+  area.style.top = "-1000px";
+  document.body.appendChild(area);
+  area.focus();
+  area.select();
+  const ok = document.execCommand("copy");
+  area.remove();
+  if (!ok) {
+    throw new Error("Clipboard copy is not available in this browser.");
+  }
+  return "text";
 }
 
 function renderPlannerHtml(columns, rows) {
@@ -184,12 +275,24 @@ function renderPlayerTeamCards(team) {
       }
 
       const species = slot.species || "Unknown";
-      const primary = escapeHtml(pokemonDbSpriteUrl(species, slot.shiny));
-      const fallback = escapeHtml(showdownSpriteUrl(species));
+      const spriteCandidates = pokemonSpriteCandidates(species, slot.shiny).map(resolveExportAssetUrl);
+      const primary = escapeHtml(spriteCandidates[0] || "");
+      const fallback = escapeHtml(spriteCandidates[1] || "");
+      const exportCandidates = escapeHtml(spriteCandidates.join("\n"));
       return `
         <article class="preview-slot">
           <div class="preview-slot-head">
-            <img class="preview-slot-sprite" src="${primary}" alt="${escapeHtml(species)}" loading="lazy" onerror="this.onerror=null;this.src='${fallback}';">
+            <img
+              class="preview-slot-sprite"
+              src="${primary}"
+              data-export-candidates="${exportCandidates}"
+              data-export-fallback-src="${fallback}"
+              data-export-pokemon-species="${escapeHtml(species)}"
+              data-export-pokemon-shiny="${slot.shiny ? "true" : "false"}"
+              alt="${escapeHtml(species)}"
+              loading="lazy"
+              onerror="this.onerror=null;this.src='${fallback}';"
+            >
             <div>
               <h4>${escapeHtml(species)}</h4>
               <p class="slot-subtitle">${escapeHtml(slot.item ? `@ ${slot.item}` : "@ No item")}</p>
@@ -209,15 +312,31 @@ function renderPlayerTeamCards(team) {
   return `<div class="preview-team-grid">${cards}</div>`;
 }
 
-function renderPlayerTeamSections(players) {
+function renderPlayerTeamSections(players, options = {}) {
   const list = Array.isArray(players) ? players : [];
   if (!list.length) {
     return `<p class="preview-empty">No player teams configured yet.</p>`;
   }
 
+  const staticTeams = Boolean(options.staticPlayerTeams);
+
   const sections = list
     .map((player) => {
       const slots = player.team?.length || 0;
+      if (staticTeams) {
+        return `
+          <div class="preview-player-team preview-player-team-static">
+            <div class="preview-player-team-head preview-player-team-head-static">
+              <span class="preview-player-team-title">${escapeHtml(player.id)} Team</span>
+              <span class="preview-player-team-count">${slots} / 6 slots</span>
+            </div>
+            <div class="preview-player-team-body">
+              ${renderPlayerTeamCards(player.team)}
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <details class="preview-player-team">
           <summary class="preview-player-team-head">
@@ -239,6 +358,224 @@ function getExportPlayers(snapshot) {
   const players = Array.isArray(snapshot?.players) ? snapshot.players : [];
   const withTeam = players.filter((player) => (player.team?.length || 0) > 0);
   return withTeam.length ? withTeam : players;
+}
+
+function buildMarkdownTeamTable(players) {
+  const safePlayers = Array.isArray(players) ? players : [];
+  if (!safePlayers.length) {
+    return ["No player teams configured yet."];
+  }
+
+  const headers = ["Player", "Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6"];
+  const parts = [
+    `| ${headers.map((header) => escapeMarkdownTableCell(header)).join(" | ")} |`,
+    `| ${headers.map(() => "---").join(" | ")} |`
+  ];
+
+  safePlayers.forEach((player) => {
+    const slots = Array.isArray(player?.team) ? player.team.slice(0, 6) : [];
+    const row = [escapeMarkdownTableCell(player?.id || "Player")];
+    for (let index = 0; index < 6; index += 1) {
+      row.push(buildMarkdownCompactSlotCell(slots[index]));
+    }
+    parts.push(`| ${row.join(" | ")} |`);
+  });
+
+  return parts;
+}
+
+function buildForumPasteTeamTable(players) {
+  const safePlayers = Array.isArray(players) ? players : [];
+  if (!safePlayers.length) {
+    return "<p>No player teams configured yet.</p>";
+  }
+
+  const headerCells = ["Player", "Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6"]
+    .map((label) => `<th ${buildForumPasteCellStyle(true)}>${escapeHtml(label)}</th>`)
+    .join("");
+  const bodyRows = safePlayers
+    .map((player) => {
+      const slots = Array.isArray(player?.team) ? player.team.slice(0, 6) : [];
+      const cells = [`<td ${buildForumPasteCellStyle()}><strong>${escapeHtml(player?.id || "Player")}</strong></td>`];
+      for (let index = 0; index < 6; index += 1) {
+        cells.push(`<td ${buildForumPasteCellStyle()}>${buildForumPasteSlotHtml(slots[index])}</td>`);
+      }
+      return `<tr>${cells.join("")}</tr>`;
+    })
+    .join("");
+  return `<table ${buildForumPasteTableStyle()}><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
+function buildMarkdownPlanner(columns, rows) {
+  const safeColumns = Array.isArray(columns) ? columns : [];
+  if (!rows.length) {
+    return ["No turn actions added yet."];
+  }
+
+  const parts = [
+    `| ${["T", ...safeColumns, "FF / Notes"].map((value) => escapeMarkdownTableCell(value)).join(" | ")} |`,
+    `| ${["---", ...safeColumns.map(() => "---"), "---"].join(" | ")} |`
+  ];
+
+  rows.forEach((row) => {
+    const cells = [
+      escapeMarkdownTableCell(row.turn || "-"),
+      ...safeColumns.map((column) => escapeMarkdownTableCell(row.actions?.[column] || "-")),
+      escapeMarkdownTableCell(row.notes || "-")
+    ];
+    parts.push(`| ${cells.join(" | ")} |`);
+  });
+  return parts;
+}
+
+function buildForumPastePlannerTable(columns, rows) {
+  const safeColumns = Array.isArray(columns) ? columns : [];
+  if (!rows.length) {
+    return "<p>No turn actions added yet.</p>";
+  }
+
+  const headers = ["T", ...safeColumns, "FF / Notes"]
+    .map((label) => `<th ${buildForumPasteCellStyle(true)}>${escapeHtml(label)}</th>`)
+    .join("");
+  const bodyRows = rows
+    .map((row) => {
+      const cells = [
+        `<td ${buildForumPasteCellStyle()}><strong>${escapeHtml(row.turn || "-")}</strong></td>`,
+        ...safeColumns.map(
+          (column) => `<td ${buildForumPasteCellStyle()}>${escapeHtml(row.actions?.[column] || "-")}</td>`
+        ),
+        `<td ${buildForumPasteCellStyle()}>${escapeHtml(row.notes || "-")}</td>`
+      ];
+      return `<tr>${cells.join("")}</tr>`;
+    })
+    .join("");
+  return `<table ${buildForumPasteTableStyle()}><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
+function buildMarkdownCompactSlotCell(slot) {
+  if (!slot) {
+    return escapeMarkdownTableCell("-");
+  }
+
+  if (slot.kind === "type") {
+    const lines = [
+      buildMarkdownTypeSpriteHtml(slot),
+      `<strong>${escapeHtml(getTypeSlotLabel(slot))}</strong>`,
+      `<sub>${escapeHtml(getTypeSlotPokemonText(slot))}</sub>`
+    ].filter(Boolean);
+    return lines.join("<br>");
+  }
+
+  const species = String(slot?.species || "").trim();
+  if (!species) {
+    return escapeMarkdownTableCell("-");
+  }
+
+  const lines = [
+    buildMarkdownPokemonSpriteHtml(slot),
+    `<strong>${escapeHtml(species)}</strong>`
+  ];
+  if (hasValue(slot?.item)) {
+    lines.push(`<sub>@ ${escapeHtml(slot.item)}</sub>`);
+  }
+  return lines.join("<br>");
+}
+
+function buildForumPasteSlotHtml(slot) {
+  if (!slot) {
+    return "-";
+  }
+
+  if (slot.kind === "type") {
+    const lines = [
+      buildMarkdownTypeSpriteHtml(slot),
+      `<strong>${escapeHtml(getTypeSlotLabel(slot))}</strong>`,
+      `<sub>${escapeHtml(getTypeSlotPokemonText(slot))}</sub>`
+    ].filter(Boolean);
+    return lines.join("<br>");
+  }
+
+  const species = String(slot?.species || "").trim();
+  if (!species) {
+    return "-";
+  }
+
+  const lines = [
+    buildMarkdownPokemonSpriteHtml(slot),
+    `<strong>${escapeHtml(species)}</strong>`
+  ];
+  if (hasValue(slot?.item)) {
+    lines.push(`<sub>@ ${escapeHtml(slot.item)}</sub>`);
+  }
+  return lines.join("<br>");
+}
+
+function buildForumPasteTableStyle() {
+  return 'style="border-collapse:collapse;width:100%;margin:0 0 16px 0;"';
+}
+
+function buildForumPasteCellStyle(isHeader = false) {
+  const background = isHeader ? "#f3f4f6" : "#ffffff";
+  const align = isHeader ? "center" : "center";
+  return `style="border:1px solid #d1d5db;padding:8px;vertical-align:top;text-align:${align};background:${background};"`;
+}
+
+function buildMarkdownPokemonSpriteHtml(slot) {
+  const species = String(slot?.species || "").trim();
+  if (!species) {
+    return "";
+  }
+
+  const spriteUrl = pokemonSpriteCandidates(species, slot?.shiny)
+    .map(resolveExportAssetUrl)
+    .find(Boolean);
+  if (!spriteUrl) {
+    return "";
+  }
+  return `<img src="${escapeHtml(spriteUrl)}" alt="${escapeHtml(species)}" width="40" height="40">`;
+}
+
+function buildMarkdownTypeSpriteHtml(slot) {
+  const urls = [slot?.iconUrl, slot?.secondaryIconUrl]
+    .map(resolveExportAssetUrl)
+    .filter(Boolean);
+  if (!urls.length) {
+    return "";
+  }
+
+  const typeNames = getTypeSlotNames(slot);
+  return urls
+    .map(
+      (url, index) =>
+        `<img src="${escapeHtml(url)}" alt="${escapeHtml(typeNames[index] || `Type ${index + 1}`)}" height="18">`
+    )
+    .join(" ");
+}
+
+function escapeMarkdownText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/([\\`*_{}\[\]()#+|])/g, "\\$1")
+    .trim();
+}
+
+function escapeMarkdownTableCell(value) {
+  return String(value || "-")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => escapeMarkdownText(line))
+    .join("<br>")
+    .replace(/\|/g, "\\|")
+    .trim() || "-";
+}
+
+function escapeMarkdownBlock(value) {
+  const lines = String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => escapeMarkdownText(line))
+    .filter((line, index, list) => line.length > 0 || index < list.length - 1);
+  return (lines.length ? lines : ["No description provided."]).join("\n> ");
 }
 
 function buildThemeCss() {
@@ -672,4 +1009,438 @@ export function downloadBlob(blob, filename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+const EXPORT_IMAGE_PLACEHOLDER_BG = "#1f2530";
+const EXPORT_IMAGE_PLACEHOLDER_FG = "#f5f7ff";
+const EXPORT_IMAGE_BACKGROUND_BASE = "#0b0d12";
+const EXPORT_IMAGE_BACKGROUND_TOP = "#171b23";
+const EXPORT_IMAGE_BACKGROUND_GLOW = "rgba(190, 210, 255, 0.12)";
+const EXPORT_IMAGE_DEFAULT_SCALE = 2;
+const EXPORT_IMAGE_CACHE = new Map();
+const EXPORT_POKEAPI_SPRITE_CACHE = new Map();
+
+export async function exportElementAsImage(element, format, filename, options = {}) {
+  if (!(element instanceof HTMLElement)) {
+    throw new Error("Preview element is not available.");
+  }
+
+  const exportFormat = normalizeExportImageFormat(format);
+  if (!exportFormat) {
+    throw new Error("Unsupported image format.");
+  }
+
+  await document.fonts?.ready;
+
+  const rect = element.getBoundingClientRect();
+  const baseWidth = Math.max(Math.ceil(rect.width), Math.ceil(element.scrollWidth), 1);
+  const scale = clampExportScale(options.scale);
+
+  const clone = element.cloneNode(true);
+  prepareCloneForImageExport(element, clone, { width: baseWidth });
+  flattenDetailsForImageExport(clone);
+  const { width, height } = measureCloneSize(clone, baseWidth);
+  await inlineCloneImages(clone);
+
+  const svgMarkup = buildSvgMarkup(clone, width, height);
+  const image = await loadSvgImage(svgMarkup);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Canvas export is not supported in this browser.");
+  }
+
+  context.scale(scale, scale);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  paintExportBackground(context, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  const blob = await canvasToBlob(
+    canvas,
+    exportFormat.mime,
+    typeof options.quality === "number" ? options.quality : exportFormat.quality
+  );
+
+  downloadBlob(blob, filename);
+}
+
+function normalizeExportImageFormat(format) {
+  const value = String(format || "").trim().toLowerCase();
+  if (value === "webp") {
+    return {
+      extension: "webp",
+      mime: "image/webp",
+      quality: 0.96
+    };
+  }
+  if (value === "jpeg" || value === "jpg") {
+    return {
+      extension: "jpg",
+      mime: "image/jpeg",
+      quality: 0.92
+    };
+  }
+  return null;
+}
+
+function clampExportScale(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return EXPORT_IMAGE_DEFAULT_SCALE;
+  }
+  return Math.min(Math.max(numeric, 1), 3);
+}
+
+function prepareCloneForImageExport(source, clone, size) {
+  const pairs = [[source, clone]];
+
+  while (pairs.length) {
+    const [sourceNode, cloneNode] = pairs.pop();
+    if (!(sourceNode instanceof HTMLElement) || !(cloneNode instanceof HTMLElement)) {
+      continue;
+    }
+
+    inlineComputedStyle(sourceNode, cloneNode);
+
+    if (cloneNode instanceof HTMLDetailsElement) {
+      cloneNode.open = true;
+      cloneNode.setAttribute("open", "");
+    }
+
+    if (cloneNode.matches(".planner-table-wrap, .preview-player-team-body")) {
+      cloneNode.style.overflow = "visible";
+    }
+
+    if (cloneNode.matches(".preview-guide")) {
+      cloneNode.style.width = `${size.width}px`;
+    }
+
+    const sourceChildren = Array.from(sourceNode.children);
+    const cloneChildren = Array.from(cloneNode.children);
+    for (let index = sourceChildren.length - 1; index >= 0; index -= 1) {
+      pairs.push([sourceChildren[index], cloneChildren[index]]);
+    }
+  }
+}
+
+function measureCloneSize(clone, baseWidth) {
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-100000px";
+  wrapper.style.top = "0";
+  wrapper.style.zIndex = "-1";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.visibility = "hidden";
+  wrapper.style.width = `${baseWidth}px`;
+  wrapper.style.padding = "0";
+  wrapper.style.margin = "0";
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  try {
+    const width = Math.max(
+      Math.ceil(baseWidth),
+      Math.ceil(clone.scrollWidth),
+      Math.ceil(wrapper.scrollWidth),
+      1
+    );
+    const height = Math.max(
+      Math.ceil(clone.scrollHeight),
+      Math.ceil(wrapper.scrollHeight),
+      1
+    );
+    return { width, height };
+  } finally {
+    wrapper.remove();
+  }
+}
+
+function flattenDetailsForImageExport(root) {
+  const detailNodes = Array.from(root.querySelectorAll("details"));
+  detailNodes.forEach((detailNode) => {
+    const replacement = document.createElement("div");
+    copyElementPresentation(detailNode, replacement);
+    replacement.style.display = "block";
+
+    Array.from(detailNode.childNodes).forEach((child) => {
+      if (
+        child.nodeType === Node.ELEMENT_NODE &&
+        child instanceof HTMLElement &&
+        child.tagName.toLowerCase() === "summary"
+      ) {
+        const summaryReplacement = document.createElement("div");
+        copyElementPresentation(child, summaryReplacement);
+        summaryReplacement.style.display = summaryReplacement.style.display || "flex";
+        Array.from(child.childNodes).forEach((summaryChild) => {
+          summaryReplacement.appendChild(summaryChild);
+        });
+        replacement.appendChild(summaryReplacement);
+        return;
+      }
+
+      replacement.appendChild(child);
+    });
+
+    detailNode.replaceWith(replacement);
+  });
+}
+
+function copyElementPresentation(source, target) {
+  for (const attribute of Array.from(source.attributes)) {
+    if (attribute.name === "open") {
+      continue;
+    }
+    target.setAttribute(attribute.name, attribute.value);
+  }
+  target.style.cssText = source.style.cssText;
+}
+
+function inlineComputedStyle(sourceNode, cloneNode) {
+  const computed = window.getComputedStyle(sourceNode);
+  for (const property of computed) {
+    cloneNode.style.setProperty(
+      property,
+      computed.getPropertyValue(property),
+      computed.getPropertyPriority(property)
+    );
+  }
+  cloneNode.style.setProperty("animation", "none");
+  cloneNode.style.setProperty("transition", "none");
+  cloneNode.style.setProperty("caret-color", "transparent");
+}
+
+async function inlineCloneImages(cloneRoot) {
+  const images = Array.from(cloneRoot.querySelectorAll("img"));
+  await Promise.all(
+    images.map(async (img) => {
+      const candidates = await getImageExportCandidates(img);
+
+      if (!candidates.length) {
+        img.src = buildPlaceholderImageDataUrl(img.alt || "?");
+        return;
+      }
+
+      for (const candidateUrl of candidates) {
+        try {
+          img.src = await imageUrlToDataUrl(candidateUrl);
+          return;
+        } catch {
+          // Try the next candidate before falling back to a placeholder.
+        }
+      }
+
+      img.src = buildPlaceholderImageDataUrl(img.alt || "?");
+    })
+  );
+}
+
+async function getImageExportCandidates(img) {
+  const attributeCandidates = String(img.getAttribute("data-export-candidates") || "")
+    .split("\n")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const pokemonSpecies = String(img.getAttribute("data-export-pokemon-species") || "").trim();
+  const pokemonApiCandidates = pokemonSpecies
+    ? await getPokemonApiSpriteCandidates(
+        pokemonSpecies,
+        String(img.getAttribute("data-export-pokemon-shiny") || "").trim() === "true"
+      )
+    : [];
+
+  return [
+    ...pokemonApiCandidates,
+    ...attributeCandidates,
+    String(img.currentSrc || img.src || "").trim(),
+    String(img.getAttribute("data-export-fallback-src") || "").trim()
+  ].filter((url, index, list) => url && list.indexOf(url) === index);
+}
+
+async function getPokemonApiSpriteCandidates(species, isShiny) {
+  const slug = pokemonDbSlug(species);
+  if (!slug) {
+    return [];
+  }
+
+  const cacheKey = `${slug}:${isShiny ? "shiny" : "normal"}`;
+  if (EXPORT_POKEAPI_SPRITE_CACHE.has(cacheKey)) {
+    return EXPORT_POKEAPI_SPRITE_CACHE.get(cacheKey);
+  }
+
+  const promise = (async () => {
+    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(slug)}`, {
+      mode: "cors",
+      credentials: "omit",
+      cache: "force-cache"
+    });
+    if (!response.ok) {
+      throw new Error(`PokeAPI sprite lookup failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const blackWhiteSprites = data?.sprites?.versions?.["generation-v"]?.["black-white"];
+    const defaultSprite = isShiny ? blackWhiteSprites?.front_shiny : blackWhiteSprites?.front_default;
+    const animatedSprite = isShiny
+      ? blackWhiteSprites?.animated?.front_shiny
+      : blackWhiteSprites?.animated?.front_default;
+    const fallbackSprite = isShiny ? data?.sprites?.front_shiny : data?.sprites?.front_default;
+
+    return [defaultSprite, animatedSprite, fallbackSprite].filter(
+      (url, index, list) => url && list.indexOf(url) === index
+    );
+  })();
+
+  EXPORT_POKEAPI_SPRITE_CACHE.set(cacheKey, promise);
+
+  try {
+    return await promise;
+  } catch (error) {
+    EXPORT_POKEAPI_SPRITE_CACHE.delete(cacheKey);
+    throw error;
+  }
+}
+
+async function imageUrlToDataUrl(url) {
+  if (/^data:/i.test(url)) {
+    return url;
+  }
+
+  if (EXPORT_IMAGE_CACHE.has(url)) {
+    return EXPORT_IMAGE_CACHE.get(url);
+  }
+
+  const promise = (async () => {
+    const response = await fetch(url, { mode: "cors", credentials: "omit", cache: "force-cache" });
+    if (!response.ok) {
+      throw new Error(`Image fetch failed: ${response.status}`);
+    }
+    const blob = await response.blob();
+    return blobToDataUrl(blob);
+  })();
+
+  EXPORT_IMAGE_CACHE.set(url, promise);
+
+  try {
+    return await promise;
+  } catch (error) {
+    EXPORT_IMAGE_CACHE.delete(url);
+    throw error;
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Failed to read image blob."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function buildPlaceholderImageDataUrl(label) {
+  const text = escapeXml(getPlaceholderLabel(label));
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+      <rect width="120" height="120" rx="18" fill="${EXPORT_IMAGE_PLACEHOLDER_BG}"/>
+      <text
+        x="60"
+        y="68"
+        text-anchor="middle"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="30"
+        font-weight="700"
+        fill="${EXPORT_IMAGE_PLACEHOLDER_FG}"
+      >${text}</text>
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function getPlaceholderLabel(label) {
+  const tokens = String(label || "")
+    .replace(/\s+icon$/i, "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return "?";
+  }
+
+  return tokens
+    .slice(0, 2)
+    .map((token) => token.charAt(0).toUpperCase())
+    .join("")
+    .slice(0, 2);
+}
+
+function buildSvgMarkup(clone, width, height) {
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  wrapper.style.width = `${width}px`;
+  wrapper.style.height = `${height}px`;
+  wrapper.style.padding = "0";
+  wrapper.style.margin = "0";
+  wrapper.style.background = `linear-gradient(180deg, ${EXPORT_IMAGE_BACKGROUND_TOP} 0%, ${EXPORT_IMAGE_BACKGROUND_BASE} 100%)`;
+  wrapper.appendChild(clone);
+
+  const serialized = new XMLSerializer().serializeToString(wrapper);
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <foreignObject width="100%" height="100%">${serialized}</foreignObject>
+    </svg>
+  `.trim();
+}
+
+function paintExportBackground(context, width, height) {
+  const fill = context.createLinearGradient(0, 0, 0, Math.max(height, 1));
+  fill.addColorStop(0, EXPORT_IMAGE_BACKGROUND_TOP);
+  fill.addColorStop(1, EXPORT_IMAGE_BACKGROUND_BASE);
+  context.fillStyle = fill;
+  context.fillRect(0, 0, width, height);
+
+  const glow = context.createRadialGradient(width * 0.18, height * 0.16, 0, width * 0.18, height * 0.16, width * 0.3);
+  glow.addColorStop(0, EXPORT_IMAGE_BACKGROUND_GLOW);
+  glow.addColorStop(1, "rgba(190, 210, 255, 0)");
+  context.fillStyle = glow;
+  context.fillRect(0, 0, width, height);
+}
+
+function loadSvgImage(svgMarkup) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to render preview as an image."));
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        reject(new Error("Failed to generate image export."));
+      },
+      type,
+      quality
+    );
+  });
+}
+
+function escapeXml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }

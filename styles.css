@@ -202,6 +202,13 @@ h1 {
   padding-left: 3.8rem;
 }
 
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.66rem;
+}
+
 .summary-head h3 {
   margin: 0;
   font-family: "Sora", sans-serif;
@@ -636,6 +643,39 @@ textarea {
   margin-top: 0.45rem;
 }
 
+.preview-player-team-static {
+  padding: 0.9rem;
+  overflow: hidden;
+  background-clip: padding-box;
+  isolation: isolate;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background:
+    linear-gradient(180deg, rgba(74, 82, 100, 0.32) 0%, rgba(30, 35, 46, 0.72) 100%);
+}
+
+.preview-player-team-head-static {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: default;
+}
+
+.preview-player-team-head-static::after {
+  content: none;
+}
+
+.preview-player-team-static .preview-player-team-body {
+  margin-top: 0;
+}
+
+.preview-player-team-static .preview-slot {
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .preview-player-team-link-wrap {
   margin: 0 0 0.45rem;
 }
@@ -744,6 +784,38 @@ textarea {
   font-size: 0.72rem;
   letter-spacing: 0.05em;
   color: rgba(216, 231, 228, 0.7);
+}
+
+.export-help-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.export-help-card {
+  padding: 1rem 1.05rem;
+}
+
+.export-help-card h3 {
+  margin: 0 0 0.4rem;
+}
+
+.export-help-card .hint {
+  margin: 0;
+}
+
+.export-help-grid-compact {
+  margin-top: 0.2rem;
+}
+
+.export-help-grid-compact .export-help-card {
+  padding: 0.85rem 0.95rem;
+}
+
+.export-help-grid-compact .export-help-card h3 {
+  font-size: 0.98rem;
+  margin-bottom: 0.28rem;
 }
 
 .preview-empty {
@@ -1545,6 +1617,12 @@ select:focus option {
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
+.btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
+}
+
 .guide-preview,
 .team-board {
   position: relative;
@@ -1610,8 +1688,22 @@ select:focus option {
     grid-template-columns: 1fr;
   }
 
+  .summary-head {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-left: 0;
+  }
+
+  .summary-actions {
+    justify-content: flex-start;
+  }
+
   .preview-player-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .export-help-grid {
+    grid-template-columns: 1fr;
   }
 
   .team-input-tabs {

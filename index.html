@@ -6,7 +6,7 @@
     <title>PokeMMO Guide Creator</title>
     <meta
       name="description"
-      content="Create PokeMMO raid guides with team builders, turn planning, and HTML exports."
+      content="Create PokeMMO raid guides with team builders, turn planning, WebP exports, and forum-ready post exports."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -34,7 +34,7 @@
         <h1>Build Full Guides Step By Step</h1>
         <p class="hero-copy">
           Start with guide metadata, then build the team, preview the final
-          guide, and export it as HTML and/or markdown.
+          guide, and export it as WebP, JSON, or a forum-ready post.
         </p>
       </section>
 
@@ -77,14 +77,43 @@
             <button id="continueToTeamBtn" type="button" class="btn btn-primary">
               Continue To Team Builder
             </button>
+            <button id="exportGuideJsonBtn" type="button" class="btn btn-ghost">
+              Export JSON
+            </button>
+            <button id="importGuideJsonBtn" type="button" class="btn btn-ghost">
+              Import JSON
+            </button>
           </div>
+          <div class="export-help-grid export-help-grid-compact">
+            <section class="subpanel export-help-card">
+              <h3>Import JSON</h3>
+              <p class="hint">
+                Load a previously saved guide to preload metadata, teams, and planner state.
+              </p>
+            </section>
+            <section class="subpanel export-help-card">
+              <h3>Export JSON</h3>
+              <p class="hint">
+                Save the full editable guide state so you can reopen or share it later.
+              </p>
+            </section>
+          </div>
+          <input id="guideJsonInput" type="file" accept="application/json,.json" class="hidden" />
           <p id="guideSetupStatus" class="status" aria-live="polite"></p>
         </form>
 
         <section id="guideSummary" class="guide-summary hidden">
           <div class="summary-head">
             <h3>Guide Info</h3>
-            <button id="editGuideBtn" type="button" class="btn btn-ghost">Edit</button>
+            <div class="summary-actions">
+              <button id="editGuideBtn" type="button" class="btn btn-ghost">Edit</button>
+              <button id="exportGuideJsonSummaryBtn" type="button" class="btn btn-ghost">
+                Export JSON
+              </button>
+              <button id="importGuideJsonSummaryBtn" type="button" class="btn btn-ghost">
+                Import JSON
+              </button>
+            </div>
           </div>
           <div class="summary-grid">
             <p><strong>Type:</strong> <span id="summaryGuideType"></span></p>
@@ -447,7 +476,7 @@
       <section id="preview-export-step" class="panel hidden">
         <div class="panel-title-wrap">
           <h2>Step 4 - Export & Preview</h2>
-          <p>Review the final guide and export as watermarked HTML.</p>
+          <p>Review the final guide and export as a watermarked WebP or a forum-ready post.</p>
         </div>
 
         <article id="guidePreview" class="guide-preview">
@@ -456,12 +485,46 @@
           </p>
         </article>
 
+        <div class="export-help-grid">
+          <section class="subpanel export-help-card">
+            <h3>WebP Export</h3>
+            <p class="hint">
+              Use this when you want a shareable final image of the guide with the current preview,
+              layout, watermark, teams, and planner.
+            </p>
+          </section>
+          <section class="subpanel export-help-card">
+            <h3>Copy PokeMMO-Forum Post</h3>
+            <p class="hint">
+              Copies a rich post directly to your clipboard so you can paste it into the PokeMMO
+              forum editor with compact team and planner tables.
+            </p>
+          </section>
+          <section class="subpanel export-help-card">
+            <h3>JSON Export</h3>
+            <p class="hint">
+              Use this when you want to save or preload the full editable guide state, including
+              metadata, teams, current player data, and planner turns.
+            </p>
+          </section>
+        </div>
+
         <div class="actions">
-          <button id="exportHtmlBtn" type="button" class="btn btn-primary">
-            Export HTML
+          <button id="exportWebpBtn" type="button" class="btn btn-primary">
+            Export WebP
+          </button>
+          <button id="copyForumHtmlBtn" type="button" class="btn btn-ghost">
+            Copy PokeMMO-Forum Post
+          </button>
+          <button id="exportGuideJsonBottomBtn" type="button" class="btn btn-ghost">
+            Export JSON
+          </button>
+          <button id="importGuideJsonBottomBtn" type="button" class="btn btn-ghost">
+            Import JSON
           </button>
           <span id="exportStatus" class="status" aria-live="polite"></span>
         </div>
+        <p id="guideJsonBottomStatus" class="status" aria-live="polite"></p>
       </section>
     </main>
 

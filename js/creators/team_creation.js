@@ -13,6 +13,8 @@ const EXAMPLE_PASTE_ID = "966581e37222b555";
 const EV_STAT_LIMIT = 252;
 const IV_STAT_LIMIT = 31;
 const EV_TOTAL_LIMIT = 510;
+const IMPORT_FIELD_MAX = 160;
+const IMPORT_NOTE_MAX = 300;
 const EXAMPLE_RAW_TEAM = `Pelipper @ Damp Rock
 Ability: Drizzle
 EVs: 248 HP / 252 Def / 8 SpD
@@ -130,6 +132,9 @@ export function initTeamCreation(options = {}) {
       state.onTeamChange = typeof handler === "function" ? handler : null;
       notifyTeamChange(state);
     },
+    loadSnapshot: (snapshot) => {
+      applySnapshot(els, state, snapshot);
+    },
     configureGuide: (guideType) => {
       state.guideType = normalizeGuideType(guideType);
       state.players = buildPlayers();
@@ -157,6 +162,7 @@ function createEmptyController() {
       players: []
     }),
     setOnChange: () => {},
+    loadSnapshot: () => {},
     configureGuide: () => {}
   };
 }
@@ -183,7 +189,7 @@ function notifyTeamChange(state) {
 function buildSnapshot(state) {
   const current = getCurrentPlayer(state);
   const players = state.players.map((player) => {
-    const team = player.team.map((slot) => ({ ...slot, moves: [...(slot.moves || [])] }));
+    const team = cloneTeam(player.team);
     return {
       id: player.id,
       label: player.label,
@@ -197,10 +203,141 @@ function buildSnapshot(state) {
     guideType: state.guideType,
     currentPlayerId: current?.id || "P1",
     title: `${current?.id || "P1"} TEAM`,
-    team: current?.team || [],
+    team: cloneTeam(current?.team || []),
     raw: serializeTeamToRaw(current?.team || []),
     players
   };
+}
+
+function cloneTeam(team) {
+  return (Array.isArray(team) ? team : []).map((slot) => ({
+    ...slot,
+    typeNames: Array.isArray(slot?.typeNames) ? slot.typeNames.filter(Boolean).slice(0, 2) : slot?.typeNames,
+    moves: [...(slot?.moves || [])]
+  }));
+}
+
+function applySnapshot(els, state, snapshot) {
+  const normalizedGuideType = normalizeGuideType(snapshot?.guideType);
+  const defaults = buildPlayers();
+  const incomingPlayers = Array.isArray(snapshot?.players) ? snapshot.players : [];
+  const playerMap = new Map(
+    incomingPlayers
+      .filter((player) => player?.id)
+      .map((player) => [
+        String(player.id).toUpperCase(),
+        {
+          ...player,
+          team: sanitizeImportedTeam(player.team, state.types)
+        }
+      ])
+  );
+
+  state.guideType = normalizedGuideType;
+  state.players = defaults.map((player) => {
+    const imported = playerMap.get(player.id);
+    const team = imported?.team || [];
+    return {
+      ...player,
+      team,
+      completed: Boolean(imported?.completed) || team.length > 0
+    };
+  });
+
+  const nextCurrentPlayerId = String(snapshot?.currentPlayerId || "").toUpperCase();
+  state.currentPlayerId = state.players.some((player) => player.id === nextCurrentPlayerId)
+    ? nextCurrentPlayerId
+    : state.players[0].id;
+  state.activeInputTab = "pokepaste";
+
+  renderTeamInputTabs(els, state);
+  renderPlayerFlow(els, state);
+  renderCurrentPlayerTeam(els, state);
+  clearStatus(els.teamInputStatus);
+  clearStatus(els.manualBuilderStatus);
+}
+
+function sanitizeImportedTeam(team, types) {
+  const sanitized = (Array.isArray(team) ? team : [])
+    .slice(0, MAX_TEAM_SIZE)
+    .map((slot) => sanitizeImportedSlot(slot, types))
+    .filter(Boolean);
+
+  return hydrateTeamTypes(sanitized, types);
+}
+
+function sanitizeImportedSlot(slot, types) {
+  if (slot?.kind === "type") {
+    return sanitizeImportedTypeSlot(slot, types);
+  }
+  return sanitizeImportedPokemonSlot(slot);
+}
+
+function sanitizeImportedPokemonSlot(slot) {
+  const species = sanitizeImportedText(slot?.species, 80);
+  if (!species) {
+    return null;
+  }
+
+  return {
+    kind: "pokemon",
+    species,
+    item: sanitizeImportedText(slot?.item, IMPORT_FIELD_MAX),
+    ability: sanitizeImportedText(slot?.ability, IMPORT_FIELD_MAX),
+    nature: sanitizeImportedText(slot?.nature, 40),
+    evs: sanitizeImportedText(slot?.evs, IMPORT_FIELD_MAX),
+    ivs: sanitizeImportedText(slot?.ivs, IMPORT_FIELD_MAX),
+    moves: sanitizeImportedMoves(slot?.moves),
+    note: sanitizeImportedText(slot?.note, IMPORT_NOTE_MAX),
+    shiny: slot?.shiny === true
+  };
+}
+
+function sanitizeImportedTypeSlot(slot, types) {
+  const typeNames = sanitizeImportedTypeNames(slot, types);
+  if (!typeNames.length) {
+    return null;
+  }
+
+  return {
+    kind: "type",
+    typeName: typeNames[0],
+    typeNames,
+    ability: sanitizeImportedText(slot?.ability, IMPORT_FIELD_MAX),
+    item: sanitizeImportedText(slot?.item, IMPORT_FIELD_MAX),
+    moves: sanitizeImportedMoves(slot?.moves),
+    note: sanitizeImportedText(slot?.note, IMPORT_NOTE_MAX)
+  };
+}
+
+function sanitizeImportedTypeNames(slot, types) {
+  const typeMap = new Map((types || []).map((type) => [String(type.name).toLowerCase(), type.name]));
+  const requested = [
+    ...(Array.isArray(slot?.typeNames) ? slot.typeNames : []),
+    slot?.typeName
+  ];
+
+  return requested
+    .map((value) => sanitizeImportedText(value, 32))
+    .filter(Boolean)
+    .map((value) => typeMap.get(value.toLowerCase()) || "")
+    .filter(Boolean)
+    .filter((value, index, list) => list.indexOf(value) === index)
+    .slice(0, 2);
+}
+
+function sanitizeImportedMoves(moves) {
+  return (Array.isArray(moves) ? moves : [])
+    .map((move) => sanitizeImportedText(move, 80))
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function sanitizeImportedText(value, maxLength) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }
 
 function bindEvents(els, state) {

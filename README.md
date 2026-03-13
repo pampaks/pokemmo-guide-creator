@@ -1,6 +1,6 @@
 # PokeMMO Guide Creator
 
-Static GitHub Pages app for building PokeMMO raid guides with a step-by-step workflow, synchronized team builder, planner, live preview, and single-file HTML export.
+Static GitHub Pages app for building PokeMMO raid guides with a step-by-step workflow, synchronized team builder, planner, live preview, and HTML/image export.
 
 Live site:
 https://pampaks.github.io/pokemmo-guide-creator/
@@ -43,6 +43,7 @@ Current functionality includes:
 - Turn planner with free-text per-player actions and `FF / Notes`.
 - Preview/export that renders only filled planner rows.
 - Single-file HTML export with inline CSS, raw copy support, collapsible player sections, and watermark text.
+- Styled image export as `WebP` or `JPEG` for quick sharing without sending an HTML file.
 
 ## Current Workflow
 
@@ -88,7 +89,7 @@ Only rows with real content are rendered in preview/export.
 
 ### Step 4 - Export & Preview
 
-Review the generated guide and export it as one standalone HTML file.
+Review the generated guide and export it as a standalone HTML file or a styled image snapshot.
 
 Export behavior:
 
@@ -97,6 +98,7 @@ Export behavior:
 - collapsible player team sections
 - collapsible raw team section
 - copy raw button inside exported HTML
+- preview image export as `WebP` or `JPEG`
 
 ## Tech Stack
 

@@ -1,4 +1,4 @@
-import { pokemonDbSpriteUrl, showdownSpriteUrl } from "./pokemon.js";
+import { pokemonSpriteCandidates } from "./pokemon.js";
 import { getTypeSlotLabel, getTypeSlotNames, getTypeSlotPokemonText } from "./team_slots.js";
 
 export function renderTeamBoard(container, title, team) {
@@ -60,8 +60,10 @@ function renderTypeAvatar(slot) {
   if (slot.accentColor) {
     avatar.style.setProperty("--type-accent", slot.accentColor);
   }
-  if (slot.secondaryAccentColor) {
+  if (slot.secondaryIconUrl || slot.secondaryAccentColor) {
     avatar.classList.add("type-avatar-dual");
+  }
+  if (slot.secondaryAccentColor) {
     avatar.style.setProperty("--type-accent-secondary", slot.secondaryAccentColor);
   }
 
@@ -135,11 +137,7 @@ function renderPokemonCard(slot) {
   sprite.className = "mon-sprite";
   sprite.loading = "lazy";
   sprite.alt = slot.species || "Pokemon";
-  sprite.src = pokemonDbSpriteUrl(slot.species, slot.shiny);
-  sprite.onerror = () => {
-    sprite.onerror = null;
-    sprite.src = showdownSpriteUrl(slot.species);
-  };
+  applySpriteCandidates(sprite, pokemonSpriteCandidates(slot.species, slot.shiny));
   head.appendChild(sprite);
 
   const info = document.createElement("div");
@@ -168,6 +166,31 @@ function renderPokemonCard(slot) {
 
   card.appendChild(renderMoves(slot.moves, "- Add 1-4 moves"));
   return card;
+}
+
+function applySpriteCandidates(img, candidates) {
+  const queue = Array.isArray(candidates) ? candidates.filter(Boolean) : [];
+  if (!queue.length) {
+    img.removeAttribute("src");
+    img.onerror = null;
+    return;
+  }
+
+  img.dataset.spriteCandidates = queue.slice(1).join("\n");
+  img.src = queue[0];
+  img.onerror = () => {
+    const remaining = String(img.dataset.spriteCandidates || "")
+      .split("\n")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const next = remaining.shift();
+    if (next) {
+      img.dataset.spriteCandidates = remaining.join("\n");
+      img.src = next;
+      return;
+    }
+    img.onerror = null;
+  };
 }
 
 function buildRemoveButton(index) {

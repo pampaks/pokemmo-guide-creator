@@ -1,9 +1,18 @@
 import {
+  buildForumPasteHtml,
+  buildMarkdownExport,
   buildMainExportHtml,
   buildPreviewMarkup,
+  copyRichContentToClipboard,
   downloadBlob,
+  exportElementAsImage,
   normalizeFilename
 } from "../lib/raid_export.js";
+
+const IMPORT_TURN_ROWS_MAX = 50;
+const META_NAME_MAX = 120;
+const META_IGN_MAX = 80;
+const META_DESCRIPTION_MAX = 2000;
 
 function getPlannerColumns(snapshot) {
   const raidPlayers = snapshot?.players?.map((player) => player.id).filter(Boolean);
@@ -186,6 +195,8 @@ export function initRaidCreator(teamController) {
     addTurnRowBtn: document.getElementById("addTurnRowBtn"),
     turnPlannerTable: document.getElementById("turnPlannerTable"),
     exportHtmlBtn: document.getElementById("exportHtmlBtn"),
+    copyForumHtmlBtn: document.getElementById("copyForumHtmlBtn"),
+    exportWebpBtn: document.getElementById("exportWebpBtn"),
     exportStatus: document.getElementById("exportStatus")
   };
 
@@ -204,7 +215,8 @@ export function initRaidCreator(teamController) {
       players: []
     },
     plannerColumns: ["P1", "P2", "P3", "P4"],
-    turnRows: createPlannerRows(["P1", "P2", "P3", "P4"], 6)
+    turnRows: createPlannerRows(["P1", "P2", "P3", "P4"], 6),
+    exportInFlight: false
   };
 
   setTeamStepVisible(teamController, false);
@@ -240,7 +252,11 @@ export function initRaidCreator(teamController) {
     }
     setPreviewExportStepVisible(true);
     renderPreview(els.guidePreview, state);
-    setStatus(els.exportStatus, "Preview ready. Export the guide as HTML when you're done.", "success");
+    setStatus(
+      els.exportStatus,
+      "Preview ready. Export the guide as WebP or copy the PokeMMO-forum post when you're done.",
+      "success"
+    );
     els.previewExportStep.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
@@ -287,6 +303,86 @@ export function initRaidCreator(teamController) {
     setStatus(els.exportStatus, "HTML export downloaded.", "success");
   });
 
+  els.exportWebpBtn?.addEventListener("click", async () => {
+    await handleImageExport("webp");
+  });
+
+  els.copyForumHtmlBtn?.addEventListener("click", async () => {
+    if (!state.meta) {
+      setStatus(els.exportStatus, "Complete Step 1 first.", "error");
+      return;
+    }
+    const html = buildForumPasteHtml(
+      state.meta,
+      state.teamSnapshot,
+      state.plannerColumns,
+      state.turnRows
+    );
+    const text = buildMarkdownExport(state.meta, state.teamSnapshot, state.plannerColumns, state.turnRows);
+    try {
+      const mode = await copyRichContentToClipboard(html, text);
+      setStatus(
+        els.exportStatus,
+        mode === "html"
+          ? "Forum HTML copied. Paste it directly into the PokeMMO editor."
+          : "Clipboard only supports plain text here. Markdown fallback copied instead.",
+        "success"
+      );
+    } catch (error) {
+      console.error("Forum HTML copy failed:", error);
+      setStatus(els.exportStatus, "Could not copy forum HTML.", "error");
+    }
+  });
+
+  async function handleImageExport(format) {
+    if (!state.meta) {
+      setStatus(els.exportStatus, "Complete Step 1 first.", "error");
+      return;
+    }
+
+    if (state.exportInFlight) {
+      setStatus(els.exportStatus, "Another export is already running.", "error");
+      return;
+    }
+
+    const exportPreview = createImageExportPreview(
+      state,
+      Math.max(Math.ceil(els.guidePreview?.getBoundingClientRect().width || 0), 1)
+    );
+    const previewElement = exportPreview.querySelector(".preview-guide");
+    if (!(previewElement instanceof HTMLElement)) {
+      exportPreview.remove();
+      setStatus(els.exportStatus, "Preview is not ready yet.", "error");
+      return;
+    }
+
+    state.exportInFlight = true;
+    setExportButtonsDisabled(els, true);
+    setStatus(els.exportStatus, `Rendering ${format.toUpperCase()} export...`);
+
+    try {
+      const baseName = normalizeFilename(state.meta.strategyName);
+      const extension = format === "webp" ? "webp" : "jpg";
+      await exportElementAsImage(previewElement, format, `${baseName}.${extension}`);
+      setStatus(
+        els.exportStatus,
+        `${format.toUpperCase()} export downloaded. Some external sprites may be replaced with placeholders if their host blocks embedding.`,
+        "success"
+      );
+    } catch (error) {
+      console.error(`${format} export failed:`, error);
+      setStatus(
+        els.exportStatus,
+        `Could not export ${format.toUpperCase()}. Try reloading the preview and exporting again.`,
+        "error"
+      );
+    } finally {
+      exportPreview.remove();
+      state.exportInFlight = false;
+      setExportButtonsDisabled(els, false);
+    }
+  }
+
   return {
     activate: (meta) => {
       const wasActive = Boolean(state.meta);
@@ -317,13 +413,41 @@ export function initRaidCreator(teamController) {
         "success"
       );
     },
+    getState: () => ({
+      meta: state.meta ? { ...state.meta } : null,
+      teamSnapshot: cloneTeamSnapshot(state.teamSnapshot),
+      plannerColumns: [...state.plannerColumns],
+      turnRows: cloneTurnRows(state.turnRows)
+    }),
+    prepareImportedState: (payload) => prepareImportedRaidState(payload),
+    loadState: (payload) => {
+      const prepared = prepareImportedRaidState(payload);
+      state.meta = prepared.meta;
+
+      teamController?.configureGuide?.(prepared.meta.guideType);
+      teamController?.loadSnapshot?.({
+        guideType: prepared.teamSnapshot.guideType,
+        currentPlayerId: prepared.teamSnapshot.currentPlayerId,
+        players: prepared.teamSnapshot.players
+      });
+
+      state.teamSnapshot = teamController?.getSnapshot?.() || state.teamSnapshot;
+      state.plannerColumns = prepared.plannerColumns;
+      state.turnRows = ensurePlannerColumns(prepared.turnRows, state.plannerColumns);
+
+      setTeamStepVisible(teamController, true);
+      setTurnPlannerStepVisible(true);
+      setPreviewExportStepVisible(true);
+      renderPlannerTable(els.turnPlannerTable, state.plannerColumns, state.turnRows);
+      renderPreview(els.guidePreview, state);
+    },
     deactivate: () => {
       state.meta = null;
       setTeamStepVisible(teamController, false);
       setTurnPlannerStepVisible(false);
       setPreviewExportStepVisible(false);
       renderEmptyPreview(els.guidePreview);
-      setStatus(els.exportStatus, "Guide info unlocked for editing.");
+      setStatus(els.exportStatus, "");
     }
   };
 }
@@ -340,16 +464,149 @@ function renderPreview(previewEl, state) {
 function sanitizeMeta(meta) {
   return {
     guideType: "Raid",
-    strategyName: String(meta?.strategyName || "").trim(),
-    authorName: String(meta?.authorName || "").trim(),
-    ignName: String(meta?.ignName || "").trim(),
-    description: String(meta?.description || "").trim()
+    strategyName: sanitizeImportedText(meta?.strategyName, META_NAME_MAX),
+    authorName: sanitizeImportedText(meta?.authorName, META_NAME_MAX),
+    ignName: sanitizeImportedText(meta?.ignName, META_IGN_MAX),
+    description: sanitizeImportedText(meta?.description, META_DESCRIPTION_MAX)
   };
+}
+
+function setExportButtonsDisabled(els, disabled) {
+  [els.exportHtmlBtn, els.copyForumHtmlBtn, els.exportWebpBtn].forEach((button) => {
+    if (button) {
+      button.disabled = disabled;
+    }
+  });
+}
+
+function createImageExportPreview(state, width) {
+  const container = document.createElement("div");
+  container.style.position = "fixed";
+  container.style.left = "-100000px";
+  container.style.top = "0";
+  container.style.zIndex = "-1";
+  container.style.pointerEvents = "none";
+  container.style.width = `${width}px`;
+  container.style.padding = "0";
+  container.style.margin = "0";
+  container.style.opacity = "0";
+  container.innerHTML = buildPreviewMarkup(
+    state.meta,
+    state.teamSnapshot,
+    state.plannerColumns,
+    state.turnRows,
+    { staticPlayerTeams: true }
+  );
+  document.body.appendChild(container);
+  return container;
 }
 
 function createEmptyRaidCreator() {
   return {
     activate: () => {},
+    getState: () => ({
+      meta: null,
+      teamSnapshot: null,
+      plannerColumns: [],
+      turnRows: []
+    }),
+    prepareImportedState: () => {
+      throw new Error("Raid creator is not available.");
+    },
+    loadState: () => {},
     deactivate: () => {}
   };
+}
+
+function cloneTurnRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row, index) => ({
+    turn: row?.turn || `T${index + 1}`,
+    actions: { ...(row?.actions || {}) },
+    notes: String(row?.notes || "")
+  }));
+}
+
+function cloneTeamSnapshot(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    ...snapshot,
+    team: cloneTeam(snapshot.team),
+    players: (Array.isArray(snapshot.players) ? snapshot.players : []).map((player) => ({
+      ...player,
+      team: cloneTeam(player.team)
+    }))
+  };
+}
+
+function cloneTeam(team) {
+  return (Array.isArray(team) ? team : []).map((slot) => ({
+    ...slot,
+    typeNames: Array.isArray(slot?.typeNames) ? slot.typeNames.filter(Boolean).slice(0, 2) : slot?.typeNames,
+    moves: [...(slot?.moves || [])]
+  }));
+}
+
+function prepareImportedRaidState(payload) {
+  const meta = sanitizeMeta(payload?.meta);
+  if (!meta.strategyName || !meta.description) {
+    throw new Error("Guide JSON must include strategy name and description.");
+  }
+
+  const teamSnapshot = sanitizeImportedTeamSnapshot(payload?.teamSnapshot);
+  const plannerColumns = getPlannerColumns(teamSnapshot);
+  const turnRows = sanitizeImportedTurnRows(payload?.turnRows, plannerColumns);
+
+  return {
+    meta,
+    teamSnapshot,
+    plannerColumns,
+    turnRows: turnRows.length ? turnRows : createPlannerRows(plannerColumns, 6)
+  };
+}
+
+function sanitizeImportedTeamSnapshot(snapshot) {
+  const players = Array.isArray(snapshot?.players)
+    ? snapshot.players
+        .filter((player) => player?.id)
+        .map((player) => ({
+          id: String(player.id).toUpperCase(),
+          team: cloneTeam(player.team)
+        }))
+    : [];
+
+  const currentPlayerId = String(snapshot?.currentPlayerId || "P1").toUpperCase();
+
+  return {
+    guideType: "Raid",
+    currentPlayerId,
+    players
+  };
+}
+
+function sanitizeImportedTurnRows(rows, columns) {
+  return (Array.isArray(rows) ? rows : [])
+    .slice(0, IMPORT_TURN_ROWS_MAX)
+    .map((row, index) => ({
+      turn: row?.turn || `T${index + 1}`,
+      actions: sanitizeImportedActions(row?.actions, columns),
+      notes: sanitizeImportedText(row?.notes, 300)
+    }));
+}
+
+function sanitizeImportedActions(actions, columns) {
+  const safeActions = {};
+  (Array.isArray(columns) ? columns : []).forEach((column) => {
+    safeActions[column] = sanitizeImportedText(actions?.[column], 200);
+  });
+  return safeActions;
+}
+
+function sanitizeImportedText(value, maxLength) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 }

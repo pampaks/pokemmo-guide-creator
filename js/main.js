@@ -19,6 +19,7 @@ try {
     setVisible: () => {},
     getSnapshot: () => ({ title: "TEAM SHOWDOWN", team: [], raw: "" }),
     setOnChange: () => {},
+    loadSnapshot: () => {},
     configureGuide: () => {}
   };
 }
@@ -27,6 +28,45 @@ const raidCreator = initRaidCreator(teamController);
 const gymRerunCreator = initGymRerunCreator();
 
 initGuideWorkflow({
+  buildGuideJson: (meta) => ({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    meta: {
+      guideType: String(meta?.guideType || "Raid"),
+      strategyName: String(meta?.strategyName || ""),
+      authorName: String(meta?.authorName || ""),
+      ignName: String(meta?.ignName || ""),
+      description: String(meta?.description || "")
+    },
+    raid: raidCreator.getState()
+  }),
+  prepareGuideJsonImport: async (payload, meta) => {
+    const raidState = payload?.raid || payload;
+    if (meta?.guideType === "Raid") {
+      return {
+        version: Number(payload?.version || 1),
+        exportedAt: String(payload?.exportedAt || ""),
+        meta,
+        raid: raidCreator.prepareImportedState({
+          meta,
+          teamSnapshot: raidState?.teamSnapshot,
+          plannerColumns: raidState?.plannerColumns,
+          turnRows: raidState?.turnRows
+        })
+      };
+    }
+    throw new Error("Unsupported guide type in imported JSON.");
+  },
+  onImportGuideJson: async (payload, meta) => {
+    const raidState = payload?.raid || payload;
+    if (meta?.guideType === "Raid") {
+      gymRerunCreator.deactivate();
+      raidCreator.loadState(raidState);
+      return;
+    }
+    raidCreator.deactivate();
+    gymRerunCreator.activate(meta);
+  },
   onGuideLock: (meta) => {
     if (meta?.guideType === "Raid") {
       gymRerunCreator.deactivate();
